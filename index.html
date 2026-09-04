@@ -160,7 +160,32 @@ async function saveTask(){await sb.from("cv_tasks").insert({owner_id:me.id,title
 function categoryModal(){modal("Kategorie hinzufügen",`<div class="form-grid">${f("catname","Name")}${f("catslug","Kurzname / Slug")}${f("catpos","Position","number")}</div>`,"saveCategory()")}
 async function saveCategory(){await sb.from("cv_categories").insert({name:$("#catname").value,slug:$("#catslug").value.toLowerCase().replace(/[^a-z0-9-]/g,"-"),position:Number($("#catpos").value||100)});closeModal();await reload();render("settings")}
 function accessModal(){modal("Discord-Account freigeben",`<div class="form-grid">${f("adid","Discord-ID")}${f("adname","Anzeigename")}${sel("adrole","Rolle",["member","admin"])}</div>`,"saveAccess()")}
-async function saveAccess(){await sb.from("cv_access").insert({discord_id:$("#adid").value.trim(),display_name:$("#adname").value.trim(),discord_username:$("#adname").value.trim(),role:$("#adrole").value,enabled:true});closeModal();render("access")}
+async function saveAccess(){
+  const discordId = $("#adid").value.trim();
+  const displayName = $("#adname").value.trim();
+  const role = $("#adrole").value;
+
+  if(!discordId){
+    alert("Bitte eine Discord-ID eintragen.");
+    return;
+  }
+
+  const {error} = await sb.rpc("cv_add_access", {
+    p_discord_id: discordId,
+    p_display_name: displayName,
+    p_role: role
+  });
+
+  if(error){
+    console.error(error);
+    alert("Speichern fehlgeschlagen: " + error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("access");
+}
 function f(id,label,type="text"){return `<div class="field"><label>${label}</label><input id="${id}" type="${type}"></div>`}
 function sel(id,label,opts){return `<div class="field"><label>${label}</label><select id="${id}">${opts.map(x=>`<option value="${x}">${x}</option>`).join("")}</select></div>`}
 function selObj(id,label,arr){return `<div class="field"><label>${label}</label><select id="${id}">${arr.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></div>`}
