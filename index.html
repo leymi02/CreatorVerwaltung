@@ -115,8 +115,32 @@ function warnPage(){return `<div class="section-head"><h2>Warnungen</h2><button 
 function eventPage(){return `<div class="section-head"><h2>Termine</h2><button class="btn" onclick="eventModal()">+ Termin</button></div>${events.length?`<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Termin</th><th>Sichtbarkeit</th></tr></thead><tbody>${events.map(e=>`<tr><td>${esc(e.event_date)} ${esc(e.event_time||"")}</td><td>${esc(e.title)}</td><td>${e.visibility==="team"?"Team":"Nur ich"}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Noch keine Termine.</div>`}`}
 function taskPage(){return `<div class="section-head"><h2>Meine Aufgaben</h2><button class="btn" onclick="taskModal()">+ Aufgabe</button></div>${tasks.length?tasks.map(t=>`<div class="card" style="margin-bottom:10px"><b>${esc(t.title)}</b><div class="muted small">${esc(t.priority)} · ${esc(t.due_date||"ohne Termin")}</div></div>`).join(""):`<div class="card empty">Du hast noch keine Aufgaben.</div>`}`}
 function settingsPage(){if(access.role!=="owner")return "";return `<div class="section-head"><h2>Kategorien</h2><button class="btn" onclick="categoryModal()">+ Kategorie</button></div>${categories.map(c=>`<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between"><span>${esc(c.name)}</span><span class="muted">${c.visible?"Sichtbar":"Ausgeblendet"}</span></div>`).join("")}<div class="notice">Der Baukasten wird später zusätzlich um frei definierbare Creator-Felder erweitert.</div>`}
-function accessPage(){if(access.role!=="owner")return "";return `<div class="section-head"><h2>Discord-Freigaben</h2><button class="btn" onclick="accessModal()">+ Discord-Account</button></div><div class="notice">Hier kannst du neue Discord-IDs freigeben. Gesperrte Accounts verlieren den Zugriff auf die Verwaltungsdaten.</div>`}
-function modal(title,body,save){$("#modalRoot").innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><b>${title}</b><button class="btn secondary" onclick="closeModal()">✕</button></div>${body}<div class="actions" style="margin-top:18px"><button class="btn" onclick="${save}">Speichern</button><button class="btn secondary" onclick="closeModal()">Abbrechen</button></div></div></div>`}
+function accessPage(){
+  if(access.role!=="owner") return "";
+
+  return `
+    <div class="section-head">
+      <h2>Discord-Freigaben</h2>
+      <button class="btn" onclick="accessModal()">+ Discord-Account</button>
+    </div>
+
+    <div class="notice">
+      Hier kannst du neue Discord-IDs freigeben. Gesperrte Accounts verlieren den Zugriff auf die Verwaltungsdaten.
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+          <div>
+            <b>${esc(access.display_name || access.discord_username || "Inhaberin")}</b>
+            <div class="muted small">${esc(access.discord_id)}</div>
+          </div>
+          <div class="pill">Inhaberin</div>
+        </div>
+      </div>
+    </div>
+  `;
+}function modal(title,body,save){$("#modalRoot").innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><b>${title}</b><button class="btn secondary" onclick="closeModal()">✕</button></div>${body}<div class="actions" style="margin-top:18px"><button class="btn" onclick="${save}">Speichern</button><button class="btn secondary" onclick="closeModal()">Abbrechen</button></div></div></div>`}
 function closeModal(){$("#modalRoot").innerHTML=""}
 function creatorModal(){modal("Creator anlegen",`<div class="form-grid">${f("cname","Name")}${sel("crank","Rang",["Probe Streamer","Streamer","Creator"])}${f("cdiscord","Discord-ID")}${f("ctwitch","Twitch-Link")}${f("ctiktok","TikTok-Link")}${f("cjoined","Dabei seit","date")}<div class="field full"><label>Interne Info</label><textarea id="csummary"></textarea></div></div>`,"saveCreator()")}
 async function saveCreator(){const row={name:$("#cname").value.trim(),rank:$("#crank").value,discord_id:$("#cdiscord").value.trim()||null,twitch_url:$("#ctwitch").value.trim()||null,tiktok_url:$("#ctiktok").value.trim()||null,joined_at:$("#cjoined").value||null,summary:$("#csummary").value.trim()||null};if(!row.name)return;await sb.from("cv_creators").insert(row);closeModal();await reload();render("creators")}
