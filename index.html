@@ -37,7 +37,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
 const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[];
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[];, accesses=[]
 
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
@@ -93,14 +93,21 @@ async function boot(){
 }
 function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
 async function reload(){
- const [c,w,e,t,cat]=await Promise.all([
-  sb.from("cv_creators").select("*").order("name"),
-  sb.from("cv_warns").select("*").order("created_at",{ascending:false}),
-  sb.from("cv_events").select("*").order("event_date"),
-  sb.from("cv_tasks").select("*").order("done").order("due_date"),
-  sb.from("cv_categories").select("*").order("position")
- ]);
- creators=c.data||[];warns=w.data||[];events=e.data||[];tasks=t.data||[];categories=cat.data||[];
+  const [c,w,e,t,cat,a] = await Promise.all([
+    sb.from("cv_creators").select("*").order("name"),
+    sb.from("cv_warns").select("*").order("created_at",{ascending:false}),
+    sb.from("cv_events").select("*").order("event_date"),
+    sb.from("cv_tasks").select("*").order("done").order("due_date"),
+    sb.from("cv_categories").select("*").order("position"),
+    sb.from("cv_access").select("*").order("created_at")
+  ]);
+
+  creators = c.data || [];
+  warns = w.data || [];
+  events = e.data || [];
+  tasks = t.data || [];
+  categories = cat.data || [];
+  accesses = a.data || [];
 }
 function setPageTitle(p){const m={dashboard:["Dashboard","Deine Creator-Verwaltung auf einen Blick."],creators:["Creator","Profile, Links, Statistiken und interne Informationen."],live:["Live jetzt","Aktuelle Streams und gespeicherte Peak-Zuschauer."],warns:["Creator Warns","Warnungen und Laufzeiten übersichtlich verwalten."],calendar:["Termine","Persönliche und gemeinsame Termine."],tasks:["Meine Aufgaben","Deine privaten To-dos."],settings:["Baukasten","Kategorien der Verwaltung selbst organisieren."],access:["Zugriffsverwaltung","Du entscheidest, welche Discord-Accounts Zugriff haben."]};$("#pageTitle").textContent=m[p][0];$("#subtitle").textContent=m[p][1]}
 function render(p){setPageTitle(p);document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p)); const fn={dashboard:dash,creators:creatorPage,live:livePage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,access:accessPage}[p];$("#content").innerHTML=fn()}
