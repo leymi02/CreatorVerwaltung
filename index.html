@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CreatorVerwaltung</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0b0a10;--panel:#15131d;--panel2:#1b1825;--text:#f7f3ff;--muted:#aaa3ba;--accent:#c6a6ff;--accent2:#f0b6e8;--line:#2a2637;--good:#92e6b1;--bad:#ff9cab}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at 85% 0,#21172d 0,transparent 30%),var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit}.hidden{display:none!important}
+.login{min-height:100vh;display:grid;place-items:center;padding:24px}.login-card{width:min(470px,100%);padding:38px;border:1px solid var(--line);border-radius:28px;background:rgba(21,19,29,.94);box-shadow:0 30px 80px #0008}.mark{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#15101b;font-weight:900;font-size:24px}.login h1{font-size:34px;margin:22px 0 8px}.muted{color:var(--muted)}.btn{border:0;border-radius:13px;padding:12px 16px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#17111d;font-weight:800;cursor:pointer}.btn.secondary{background:#24202f;color:var(--text);border:1px solid var(--line)}.btn.danger{background:#3a2028;color:#ffdce2}.login .btn{width:100%;margin-top:24px;padding:15px}
+.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}.side{border-right:1px solid var(--line);padding:24px 16px;background:#0e0d13;position:sticky;top:0;height:100vh}.brand{font-weight:900;font-size:20px;padding:8px 10px 24px}.nav button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--muted);padding:11px 12px;border-radius:11px;margin:3px 0;cursor:pointer}.nav button.active,.nav button:hover{background:#1d1928;color:#fff}.side-bottom{position:absolute;bottom:20px;left:16px;right:16px}.main{padding:32px;max-width:1500px;width:100%;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:28px}.top h1{margin:0;font-size:29px}.pill{border:1px solid var(--line);background:#181520;padding:8px 11px;border-radius:999px;color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:linear-gradient(180deg,#17141f,#121019);border:1px solid var(--line);border-radius:19px;padding:20px}.metric b{font-size:29px;display:block;margin-top:8px}.section{margin-top:20px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:12px}.section h2{font-size:18px;margin:0}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:17px}table{width:100%;border-collapse:collapse;background:#121019}th,td{padding:13px 14px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}tr:last-child td{border-bottom:0}.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff536d;margin-right:7px}.empty{text-align:center;padding:42px;color:var(--muted)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:12px;color:var(--muted)}input,select,textarea{background:#0f0d14;border:1px solid var(--line);color:#fff;border-radius:11px;padding:11px}textarea{min-height:95px;resize:vertical}
+.modal-bg{position:fixed;inset:0;background:#000b;display:grid;place-items:center;padding:20px;z-index:20}.modal{width:min(680px,100%);max-height:90vh;overflow:auto;background:#17141f;border:1px solid var(--line);border-radius:22px;padding:22px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.actions{display:flex;gap:8px;flex-wrap:wrap}.small{font-size:12px}.notice{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#15121d;color:var(--muted);margin:10px 0}
+@media(max-width:950px){.shell{grid-template-columns:1fr}.side{height:auto;position:static;border-right:0;border-bottom:1px solid var(--line)}.side-bottom{position:static;margin-top:15px}.grid{grid-template-columns:1fr 1fr}.main{padding:22px}.nav{display:flex;overflow:auto}.nav button{width:auto;white-space:nowrap}}@media(max-width:560px){.grid,.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<div id="login" class="login">
+ <div class="login-card"><div class="mark">CV</div><h1>CreatorVerwaltung</h1>
+ <p class="muted">Interner Bereich für Creator, Streams, Warns, Termine und Organisation. Zugriff nur für von der Inhaberin freigegebene Discord-Accounts.</p>
+ <div id="loginMsg" class="notice hidden"></div><button id="discordLogin" class="btn">Mit Discord anmelden</button></div>
+</div>
+
+<div id="app" class="shell hidden">
+ <aside class="side"><div class="brand">CreatorVerwaltung</div><div class="nav" id="nav">
+  <button data-page="dashboard" class="active">Dashboard</button><button data-page="creators">Creator</button><button data-page="live">Live jetzt</button>
+  <button data-page="warns">Creator Warns</button><button data-page="calendar">Termine</button><button data-page="tasks">Meine Aufgaben</button>
+  <button data-page="settings" class="owner-only">Baukasten</button><button data-page="access" class="owner-only">Zugriffsverwaltung</button>
+ </div><div class="side-bottom"><div id="who" class="pill"></div><button id="logout" class="btn secondary" style="width:100%;margin-top:10px">Abmelden</button></div></aside>
+ <main class="main"><div class="top"><div><h1 id="pageTitle">Dashboard</h1><div class="muted" id="subtitle">Deine Creator-Verwaltung auf einen Blick.</div></div><div class="pill" id="rolePill"></div></div><div id="content"></div></main>
+</div>
+<div id="modalRoot"></div>
+
+<script>
+const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
+const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[];
+
+const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
+async function login(){await sb.auth.signInWithOAuth({provider:"discord",options:{redirectTo:location.origin+location.pathname}})}
+async function boot(){
+ const {data:{session}}=await sb.auth.getSession(); if(!session)return;
+ me=session.user; const did=discordIdFromUser(me);
+ if(!did){return deny("Discord-ID konnte nicht erkannt werden.");}
+ const {data:a}=await sb.from("cv_access").select("*").eq("discord_id",did).eq("enabled",true).maybeSingle();
+ if(!a){await sb.auth.signOut();return deny("Dieser Discord-Account wurde nicht für die CreatorVerwaltung freigegeben.");}
+ access=a;
+ let {data:p}=await sb.from("cv_profiles").select("*").eq("id",me.id).maybeSingle();
+ if(!p){
+   const md=me.user_metadata||{};
+   const row={id:me.id,discord_id:did,discord_username:md.user_name||md.name||a.discord_username||null,display_name:md.full_name||md.name||a.display_name||"Discord Benutzer"};
+   const r=await sb.from("cv_profiles").insert(row).select().single(); p=r.data;
+ }
+ profile=p;
+ $("#login").classList.add("hidden");$("#app").classList.remove("hidden");
+ $("#who").textContent=profile?.display_name||access.display_name||"Discord";
+ $("#rolePill").textContent=access.role==="owner"?"Inhaberin":access.role;
+ document.querySelectorAll(".owner-only").forEach(x=>x.classList.toggle("hidden",access.role!=="owner"));
+ await reload(); render("dashboard");
+}
+function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
+async function reload(){
+ const [c,w,e,t,cat]=await Promise.all([
+  sb.from("cv_creators").select("*").order("name"),
+  sb.from("cv_warns").select("*").order("created_at",{ascending:false}),
+  sb.from("cv_events").select("*").order("event_date"),
+  sb.from("cv_tasks").select("*").order("done").order("due_date"),
+  sb.from("cv_categories").select("*").order("position")
+ ]);
+ creators=c.data||[];warns=w.data||[];events=e.data||[];tasks=t.data||[];categories=cat.data||[];
+}
+function setPageTitle(p){const m={dashboard:["Dashboard","Deine Creator-Verwaltung auf einen Blick."],creators:["Creator","Profile, Links, Statistiken und interne Informationen."],live:["Live jetzt","Aktuelle Streams und gespeicherte Peak-Zuschauer."],warns:["Creator Warns","Warnungen und Laufzeiten übersichtlich verwalten."],calendar:["Termine","Persönliche und gemeinsame Termine."],tasks:["Meine Aufgaben","Deine privaten To-dos."],settings:["Baukasten","Kategorien der Verwaltung selbst organisieren."],access:["Zugriffsverwaltung","Du entscheidest, welche Discord-Accounts Zugriff haben."]};$("#pageTitle").textContent=m[p][0];$("#subtitle").textContent=m[p][1]}
+function render(p){setPageTitle(p);document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p)); const fn={dashboard:dash,creators:creatorPage,live:livePage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,access:accessPage}[p];$("#content").innerHTML=fn()}
+function dash(){let live=creators.filter(c=>c.is_live).length;return `<div class="grid">
+${metric("Probe Streamer",creators.filter(c=>c.rank==="Probe Streamer").length)}${metric("Streamer",creators.filter(c=>c.rank==="Streamer").length)}${metric("Creator",creators.filter(c=>c.rank==="Creator").length)}${metric("Aktive Warns",warns.filter(w=>new Date(w.expires_at)>new Date()).length)}
+</div><div class="section"><div class="section-head"><h2>30-Tage-Aktivität</h2><span class="pill">${live} live</span></div>${creatorTable(creators.slice(0,8))}</div>`}
+function metric(a,b){return `<div class="card metric"><span class="muted">${a}</span><b>${b}</b></div>`}
+function creatorTable(arr){if(!arr.length)return `<div class="card empty">Noch keine Creator angelegt.</div>`;return `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Rang</th><th>Twitch 30T</th><th>Tage</th><th>Ø Zuschauer</th><th>Peak</th></tr></thead><tbody>${arr.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.rank)}</td><td>${c.twitch_hours_30d||0} h</td><td>${c.twitch_days_30d||0}/30</td><td>${c.twitch_avg_viewers_30d||0}</td><td>${c.twitch_peak_viewers_30d||0}</td></tr>`).join("")}</tbody></table></div>`}
+function creatorPage(){return `<div class="section-head"><h2>Alle Creator</h2><button class="btn" onclick="creatorModal()">+ Creator anlegen</button></div>${creatorTable(creators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden. Notizen und Verlauf werden im Creator-Profil weiter ausgebaut.</div>`}
+function livePage(){return `<div class="grid">${metric("Gerade live",0)}${metric("Höchster 30T-Peak",Math.max(0,...creators.map(c=>c.twitch_peak_viewers_30d||0)))}${metric("Erfasste Creator",creators.length)}${metric("Plattform","Twitch")}</div><div class="section card empty">Die Live-Abfrage wird im nächsten Integrationsschritt mit der Twitch API verbunden. Die Datenbank für Live-Sessions und Peaks ist bereits vorbereitet.</div>`}
+function warnPage(){return `<div class="section-head"><h2>Warnungen</h2><button class="btn" onclick="warnModal()">+ Warn hinzufügen</button></div>${warns.length?`<div class="table-wrap"><table><thead><tr><th>Creator</th><th>Grund</th><th>Dauer</th><th>Endet</th></tr></thead><tbody>${warns.map(w=>`<tr><td>${esc(creators.find(c=>c.id===w.creator_id)?.name||"—")}</td><td>${esc(w.reason)}</td><td>${w.duration_days} Tage</td><td>${new Date(w.expires_at).toLocaleDateString("de-DE")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Keine Warnungen vorhanden.</div>`}`}
+function eventPage(){return `<div class="section-head"><h2>Termine</h2><button class="btn" onclick="eventModal()">+ Termin</button></div>${events.length?`<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Termin</th><th>Sichtbarkeit</th></tr></thead><tbody>${events.map(e=>`<tr><td>${esc(e.event_date)} ${esc(e.event_time||"")}</td><td>${esc(e.title)}</td><td>${e.visibility==="team"?"Team":"Nur ich"}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Noch keine Termine.</div>`}`}
+function taskPage(){return `<div class="section-head"><h2>Meine Aufgaben</h2><button class="btn" onclick="taskModal()">+ Aufgabe</button></div>${tasks.length?tasks.map(t=>`<div class="card" style="margin-bottom:10px"><b>${esc(t.title)}</b><div class="muted small">${esc(t.priority)} · ${esc(t.due_date||"ohne Termin")}</div></div>`).join(""):`<div class="card empty">Du hast noch keine Aufgaben.</div>`}`}
+function settingsPage(){if(access.role!=="owner")return "";return `<div class="section-head"><h2>Kategorien</h2><button class="btn" onclick="categoryModal()">+ Kategorie</button></div>${categories.map(c=>`<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between"><span>${esc(c.name)}</span><span class="muted">${c.visible?"Sichtbar":"Ausgeblendet"}</span></div>`).join("")}<div class="notice">Der Baukasten wird später zusätzlich um frei definierbare Creator-Felder erweitert.</div>`}
+function accessPage(){if(access.role!=="owner")return "";return `<div class="section-head"><h2>Discord-Freigaben</h2><button class="btn" onclick="accessModal()">+ Discord-Account</button></div><div class="notice">Hier kannst du neue Discord-IDs freigeben. Gesperrte Accounts verlieren den Zugriff auf die Verwaltungsdaten.</div>`}
+function modal(title,body,save){$("#modalRoot").innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><b>${title}</b><button class="btn secondary" onclick="closeModal()">✕</button></div>${body}<div class="actions" style="margin-top:18px"><button class="btn" onclick="${save}">Speichern</button><button class="btn secondary" onclick="closeModal()">Abbrechen</button></div></div></div>`}
+function closeModal(){$("#modalRoot").innerHTML=""}
+function creatorModal(){modal("Creator anlegen",`<div class="form-grid">${f("cname","Name")}${sel("crank","Rang",["Probe Streamer","Streamer","Creator"])}${f("cdiscord","Discord-ID")}${f("ctwitch","Twitch-Link")}${f("ctiktok","TikTok-Link")}${f("cjoined","Dabei seit","date")}<div class="field full"><label>Interne Info</label><textarea id="csummary"></textarea></div></div>`,"saveCreator()")}
+async function saveCreator(){const row={name:$("#cname").value.trim(),rank:$("#crank").value,discord_id:$("#cdiscord").value.trim()||null,twitch_url:$("#ctwitch").value.trim()||null,tiktok_url:$("#ctiktok").value.trim()||null,joined_at:$("#cjoined").value||null,summary:$("#csummary").value.trim()||null};if(!row.name)return;await sb.from("cv_creators").insert(row);closeModal();await reload();render("creators")}
+function warnModal(){modal("Creator Warn",`<div class="form-grid">${selObj("wcreator","Creator",creators)}${f("wreason","Grund")} ${f("wdays","Dauer in Tagen","number")}</div>`,"saveWarn()")}
+async function saveWarn(){let d=Math.max(1,Number($("#wdays").value||1)),start=new Date(),end=new Date(start.getTime()+d*86400000);await sb.from("cv_warns").insert({creator_id:$("#wcreator").value,reason:$("#wreason").value,duration_days:d,starts_at:start.toISOString(),expires_at:end.toISOString(),created_by:me.id});closeModal();await reload();render("warns")}
+function eventModal(){modal("Termin anlegen",`<div class="form-grid">${f("etitle","Titel")}${f("edate","Datum","date")}${f("etime","Uhrzeit","time")}${sel("evis","Sichtbarkeit",["personal","team"])}<div class="field full"><label>Beschreibung</label><textarea id="edesc"></textarea></div></div>`,"saveEvent()")}
+async function saveEvent(){await sb.from("cv_events").insert({owner_id:me.id,title:$("#etitle").value,event_date:$("#edate").value,event_time:$("#etime").value||null,description:$("#edesc").value||null,visibility:$("#evis").value});closeModal();await reload();render("calendar")}
+function taskModal(){modal("Aufgabe anlegen",`<div class="form-grid">${f("ttitle","Aufgabe")}${f("tdue","Fällig am","date")}${sel("tprio","Priorität",["Niedrig","Normal","Hoch"])}<div class="field full"><label>Notiz</label><textarea id="tnote"></textarea></div></div>`,"saveTask()")}
+async function saveTask(){await sb.from("cv_tasks").insert({owner_id:me.id,title:$("#ttitle").value,due_date:$("#tdue").value||null,priority:$("#tprio").value,note:$("#tnote").value||null});closeModal();await reload();render("tasks")}
+function categoryModal(){modal("Kategorie hinzufügen",`<div class="form-grid">${f("catname","Name")}${f("catslug","Kurzname / Slug")}${f("catpos","Position","number")}</div>`,"saveCategory()")}
+async function saveCategory(){await sb.from("cv_categories").insert({name:$("#catname").value,slug:$("#catslug").value.toLowerCase().replace(/[^a-z0-9-]/g,"-"),position:Number($("#catpos").value||100)});closeModal();await reload();render("settings")}
+function accessModal(){modal("Discord-Account freigeben",`<div class="form-grid">${f("adid","Discord-ID")}${f("adname","Anzeigename")}${sel("adrole","Rolle",["member","admin"])}</div>`,"saveAccess()")}
+async function saveAccess(){await sb.from("cv_access").insert({discord_id:$("#adid").value.trim(),display_name:$("#adname").value.trim(),discord_username:$("#adname").value.trim(),role:$("#adrole").value,enabled:true});closeModal();render("access")}
+function f(id,label,type="text"){return `<div class="field"><label>${label}</label><input id="${id}" type="${type}"></div>`}
+function sel(id,label,opts){return `<div class="field"><label>${label}</label><select id="${id}">${opts.map(x=>`<option value="${x}">${x}</option>`).join("")}</select></div>`}
+function selObj(id,label,arr){return `<div class="field"><label>${label}</label><select id="${id}">${arr.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></div>`}
+$("#discordLogin").onclick=login;$("#logout").onclick=async()=>{await sb.auth.signOut();location.reload()};$("#nav").onclick=e=>{let b=e.target.closest("button[data-page]");if(b)render(b.dataset.page)};
+sb.auth.onAuthStateChange(()=>setTimeout(boot,0));boot();
+</script></body></html>
