@@ -43,24 +43,53 @@ const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
 async function login(){await sb.auth.signInWithOAuth({provider:"discord",options:{redirectTo:location.origin+location.pathname}})}
 async function boot(){
- const {data:{session}}=await sb.auth.getSession(); if(!session)return;
- me=session.user; const did=discordIdFromUser(me);
- if(!did){return deny("Discord-ID konnte nicht erkannt werden.");}
- const {data:a}=await sb.from("cv_access").select("*").eq("discord_id",did).eq("enabled",true).maybeSingle();
- if(!a){await sb.auth.signOut();return deny("Dieser Discord-Account wurde nicht für die CreatorVerwaltung freigegeben.");}
- access=a;
- let {data:p}=await sb.from("cv_profiles").select("*").eq("id",me.id).maybeSingle();
- if(!p){
-   const md=me.user_metadata||{};
-   const row={id:me.id,discord_id:did,discord_username:md.user_name||md.name||a.discord_username||null,display_name:md.full_name||md.name||a.display_name||"Discord Benutzer"};
-   const r=await sb.from("cv_profiles").insert(row).select().single(); p=r.data;
- }
- profile=p;
- $("#login").classList.add("hidden");$("#app").classList.remove("hidden");
- $("#who").textContent=profile?.display_name||access.display_name||"Discord";
- $("#rolePill").textContent=access.role==="owner"?"Inhaberin":access.role;
- document.querySelectorAll(".owner-only").forEach(x=>x.classList.toggle("hidden",access.role!=="owner"));
- await reload(); render("dashboard");
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session) return;
+
+  me = session.user;
+
+  const {data, error} = await sb.rpc("cv_finish_discord_login");
+
+  if(error){
+    console.error("cv_finish_discord_login:", error);
+    return deny("Discord-Anmeldung konnte nicht geprüft werden.");
+  }
+
+  const a = Array.isArray(data) ? data[0] : data;
+
+  if(!a || !a.enabled){
+    await sb.auth.signOut();
+    return deny("Dieser Discord-Account wurde nicht für die CreatorVerwaltung freigegeben.");
+  }
+
+  access = a;
+
+  const {data:p} = await sb
+    .from("cv_profiles")
+    .select("*")
+    .eq("id", me.id)
+    .maybeSingle();
+
+  profile = p;
+
+  $("#login").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+
+  $("#who").textContent =
+    profile?.display_name ||
+    access.display_name ||
+    access.discord_username ||
+    "Discord";
+
+  $("#rolePill").textContent =
+    access.role === "owner" ? "Inhaberin" : access.role;
+
+  document.querySelectorAll(".owner-only").forEach(x =>
+    x.classList.toggle("hidden", access.role !== "owner")
+  );
+
+  await reload();
+  render("dashboard");
 }
 function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
 async function reload(){
