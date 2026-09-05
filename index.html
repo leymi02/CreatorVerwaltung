@@ -226,7 +226,39 @@ function warnPage(){
 }
 function eventPage(){
   if(!hasPerm("events_view")) return permissionDenied();
-  return `<div class="section-head"><h2>Termine</h2>${hasPerm("events_create")?`<button class="btn" onclick="eventModal()">+ Termin</button>`:""}</div>${events.length?`<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Termin</th><th>Sichtbarkeit</th></tr></thead><tbody>${events.map(e=>`<tr><td>${esc(e.event_date)} ${esc(e.event_time||"")}</td><td>${esc(e.title)}</td><td>${e.visibility==="team"?"Team":"Nur ich"}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Noch keine Termine.</div>`}`;
+
+  const canEdit=hasPerm("events_edit");
+  const canDelete=hasPerm("events_delete");
+
+  return `<div class="section-head">
+    <h2>Termine</h2>
+    ${hasPerm("events_create")?`<button class="btn" onclick="eventModal()">+ Termin</button>`:""}
+  </div>
+
+  ${events.length?`<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Datum</th>
+      <th>Termin</th>
+      <th>Sichtbarkeit</th>
+      <th>Erstellt von</th>
+      ${(canEdit||canDelete)?"<th>Aktionen</th>":""}
+    </tr></thead>
+    <tbody>
+      ${events.map(e=>`<tr>
+        <td>${esc(e.event_date)} ${esc(e.event_time||"")}</td>
+        <td>
+          <b>${esc(e.title)}</b>
+          ${e.description?`<div class="muted small" style="margin-top:4px">${esc(e.description)}</div>`:""}
+        </td>
+        <td>${e.visibility==="team"?"Team":"Nur ich"}</td>
+        <td>${esc(e.created_by_name||"–")}</td>
+        ${(canEdit||canDelete)?`<td><div class="actions">
+          ${canEdit?`<button class="btn secondary" onclick="editEvent('${e.id}')">✎ Bearbeiten</button>`:""}
+          ${canDelete?`<button class="btn danger" onclick="deleteEvent('${e.id}')">✕ Löschen</button>`:""}
+        </div></td>`:""}
+      </tr>`).join("")}
+    </tbody>
+  </table></div>`:`<div class="card empty">Noch keine Termine.</div>`}`;
 }
 function taskPage(){
   if(!hasPerm("tasks_view")) return permissionDenied();
@@ -639,8 +671,132 @@ async function deleteWarn(id){
   render("warns");
 }
 
-function eventModal(){if(!hasPerm("events_create"))return alert("Keine Berechtigung.");modal("Termin anlegen",`<div class="form-grid">${f("etitle","Titel")}${f("edate","Datum","date")}${f("etime","Uhrzeit","time")}${sel("evis","Sichtbarkeit",["personal","team"])}<div class="field full"><label>Beschreibung</label><textarea id="edesc"></textarea></div></div>`,"saveEvent()")}
-async function saveEvent(){await sb.from("cv_events").insert({owner_id:me.id,title:$("#etitle").value,event_date:$("#edate").value,event_time:$("#etime").value||null,description:$("#edesc").value||null,visibility:$("#evis").value});closeModal();await reload();render("calendar")}
+function eventModal(){
+  if(!hasPerm("events_create")) return alert("Keine Berechtigung.");
+
+  modal("Termin anlegen",`<div class="form-grid">
+    ${f("etitle","Titel")}
+    ${f("edate","Datum","date")}
+    ${f("etime","Uhrzeit","time")}
+    ${sel("evis","Sichtbarkeit",["personal","team"])}
+    <div class="field full">
+      <label>Beschreibung</label>
+      <textarea id="edesc"></textarea>
+    </div>
+  </div>`,"saveEvent()");
+}
+
+async function saveEvent(){
+  if(!hasPerm("events_create")) return alert("Keine Berechtigung.");
+
+  const title=$("#etitle").value.trim();
+  const eventDate=$("#edate").value;
+  const eventTime=$("#etime").value||null;
+  const description=$("#edesc").value.trim();
+  const visibility=$("#evis").value;
+
+  if(!title) return alert("Bitte einen Titel eintragen.");
+  if(!eventDate) return alert("Bitte ein Datum auswählen.");
+
+  const {error}=await sb.rpc("cv_add_event",{
+    p_title:title,
+    p_event_date:eventDate,
+    p_event_time:eventTime,
+    p_description:description,
+    p_visibility:visibility
+  });
+
+  if(error){
+    console.error(error);
+    alert("Termin konnte nicht gespeichert werden: "+error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("calendar");
+}
+
+function editEvent(id){
+  if(!hasPerm("events_edit")) return alert("Keine Berechtigung.");
+
+  const e=events.find(x=>x.id===id);
+  if(!e) return alert("Termin wurde nicht gefunden.");
+
+  modal("Termin bearbeiten",`<div class="form-grid">
+    ${f("uetitle","Titel")}
+    ${f("uedate","Datum","date")}
+    ${f("uetime","Uhrzeit","time")}
+    ${sel("uevis","Sichtbarkeit",["personal","team"])}
+    <div class="field full">
+      <label>Beschreibung</label>
+      <textarea id="uedesc"></textarea>
+    </div>
+    <div class="field full">
+      <div class="notice" style="margin:0">
+        <b>Erstellt von:</b> ${esc(e.created_by_name||"Nicht gespeichert")}
+      </div>
+    </div>
+  </div>`,`updateEvent('${id}')`);
+
+  $("#uetitle").value=e.title||"";
+  $("#uedate").value=e.event_date ? String(e.event_date).slice(0,10) : "";
+  $("#uetime").value=e.event_time ? String(e.event_time).slice(0,5) : "";
+  $("#uevis").value=e.visibility||"personal";
+  $("#uedesc").value=e.description||"";
+}
+
+async function updateEvent(id){
+  if(!hasPerm("events_edit")) return alert("Keine Berechtigung.");
+
+  const title=$("#uetitle").value.trim();
+  const eventDate=$("#uedate").value;
+  const eventTime=$("#uetime").value||null;
+  const description=$("#uedesc").value.trim();
+  const visibility=$("#uevis").value;
+
+  if(!title) return alert("Bitte einen Titel eintragen.");
+  if(!eventDate) return alert("Bitte ein Datum auswählen.");
+
+  const {error}=await sb.rpc("cv_update_event",{
+    p_id:id,
+    p_title:title,
+    p_event_date:eventDate,
+    p_event_time:eventTime,
+    p_description:description,
+    p_visibility:visibility
+  });
+
+  if(error){
+    console.error(error);
+    alert("Termin konnte nicht geändert werden: "+error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("calendar");
+}
+
+async function deleteEvent(id){
+  if(!hasPerm("events_delete")) return alert("Keine Berechtigung.");
+
+  const e=events.find(x=>x.id===id);
+  if(!e) return alert("Termin wurde nicht gefunden.");
+
+  if(!confirm(`Termin "${e.title}" wirklich löschen?`)) return;
+
+  const {error}=await sb.rpc("cv_delete_event",{p_id:id});
+
+  if(error){
+    console.error(error);
+    alert("Termin konnte nicht gelöscht werden: "+error.message);
+    return;
+  }
+
+  await reload();
+  render("calendar");
+}
 function taskModal(){if(!hasPerm("tasks_create"))return alert("Keine Berechtigung.");modal("Aufgabe anlegen",`<div class="form-grid">${f("ttitle","Aufgabe")}${f("tdue","Fällig am","date")}${sel("tprio","Priorität",["Niedrig","Normal","Hoch"])}<div class="field full"><label>Notiz</label><textarea id="tnote"></textarea></div></div>`,"saveTask()")}
 async function saveTask(){await sb.from("cv_tasks").insert({owner_id:me.id,title:$("#ttitle").value,due_date:$("#tdue").value||null,priority:$("#tprio").value,note:$("#tnote").value||null});closeModal();await reload();render("tasks")}
 function categoryModal(){if(!hasPerm("builder_edit"))return alert("Keine Berechtigung.");modal("Kategorie hinzufügen",`<div class="form-grid">${f("catname","Name")}${f("catslug","Kurzname / Slug")}${f("catpos","Position","number")}</div>`,"saveCategory()")}
