@@ -243,6 +243,55 @@ function creatorModal(){modal("Creator anlegen",`<div class="form-grid">${f("cna
   await reload();
   render("creators");
 }
+
+function editCreator(id){
+  const c = creators.find(x => x.id === id);
+  if(!c){ alert("Creator wurde nicht gefunden."); return; }
+
+  modal("Creator bearbeiten", `<div class="form-grid">
+    ${f("ename","Name")}
+    ${sel("erank","Rang",["Probe Streamer","Streamer","Creator"])}
+    ${f("ediscord","Discord-ID")}
+    ${f("etwitch","Twitch-Link")}
+    ${f("etiktok","TikTok-Link")}
+    ${f("ejoined","Dabei seit","date")}
+    <div class="field full"><label>Interne Info</label><textarea id="esummary"></textarea></div>
+  </div>`, `updateCreator('${id}')`);
+
+  $("#ename").value = c.name || "";
+  $("#erank").value = c.rank || "Probe Streamer";
+  $("#ediscord").value = c.discord_id || "";
+  $("#etwitch").value = c.twitch_url || "";
+  $("#etiktok").value = c.tiktok_url || "";
+  $("#ejoined").value = c.joined_at ? String(c.joined_at).slice(0,10) : "";
+  $("#esummary").value = c.summary || "";
+}
+
+async function updateCreator(id){
+  const name = $("#ename").value.trim();
+  if(!name){ alert("Bitte einen Namen eintragen."); return; }
+
+  const {error} = await sb.from("cv_creators").update({
+    name,
+    rank: $("#erank").value,
+    discord_id: $("#ediscord").value.trim() || null,
+    twitch_url: $("#etwitch").value.trim() || null,
+    tiktok_url: $("#etiktok").value.trim() || null,
+    joined_at: $("#ejoined").value || null,
+    summary: $("#esummary").value.trim() || null
+  }).eq("id", id);
+
+  if(error){
+    console.error(error);
+    alert("Änderungen konnten nicht gespeichert werden: " + error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("creators");
+}
+
 function warnModal(){modal("Creator Warn",`<div class="form-grid">${selObj("wcreator","Creator",creators)}${f("wreason","Grund")} ${f("wdays","Dauer in Tagen","number")}</div>`,"saveWarn()")}
 async function saveWarn(){let d=Math.max(1,Number($("#wdays").value||1)),start=new Date(),end=new Date(start.getTime()+d*86400000);await sb.from("cv_warns").insert({creator_id:$("#wcreator").value,reason:$("#wreason").value,duration_days:d,starts_at:start.toISOString(),expires_at:end.toISOString(),created_by:me.id});closeModal();await reload();render("warns")}
 function eventModal(){modal("Termin anlegen",`<div class="form-grid">${f("etitle","Titel")}${f("edate","Datum","date")}${f("etime","Uhrzeit","time")}${sel("evis","Sichtbarkeit",["personal","team"])}<div class="field full"><label>Beschreibung</label><textarea id="edesc"></textarea></div></div>`,"saveEvent()")}
