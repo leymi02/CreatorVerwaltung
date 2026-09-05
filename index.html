@@ -226,7 +226,10 @@ function accessPage(){
 
               <div style="display:flex;gap:8px;align-items:center">
                 <div class="pill">${roleName}</div>
-                ${a.role!=="owner"?`<button class="btn secondary" onclick="permissionModal('${a.discord_id}')">⚙ Berechtigungen</button>`:""}
+                ${a.role!=="owner"?`
+                  <button class="btn secondary" onclick="permissionModal('${a.discord_id}')">⚙ Berechtigungen</button>
+                  <button class="btn danger" onclick="deleteAccess('${a.discord_id}','${esc(a.display_name || a.discord_username || "Discord Benutzer")}')">✕ Löschen</button>
+                `:""}
               </div>
             </div>
           </div>
@@ -257,6 +260,29 @@ const permissionGroups=[
   ["Aufgaben",[["tasks_view","Ansehen"],["tasks_create","Anlegen"],["tasks_edit","Bearbeiten"],["tasks_delete","Löschen"]]],
   ["Baukasten",[["builder_view","Ansehen"],["builder_edit","Bearbeiten"]]]
 ];
+
+
+async function deleteAccess(discordId, displayName){
+  const ok = confirm(
+    `Zugriff für "${displayName}" wirklich vollständig entfernen?\n\n` +
+    `Der Discord-Account verliert danach den Zugriff auf die CreatorVerwaltung.`
+  );
+
+  if(!ok) return;
+
+  const {error} = await sb.rpc("cv_delete_access", {
+    p_discord_id: String(discordId)
+  });
+
+  if(error){
+    console.error(error);
+    alert("Account konnte nicht entfernt werden: " + error.message);
+    return;
+  }
+
+  await reload();
+  render("access");
+}
 
 function permissionModal(discordId){
   const a=accesses.find(x=>String(x.discord_id)===String(discordId));
