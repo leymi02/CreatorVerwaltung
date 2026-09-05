@@ -27,7 +27,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
  <aside class="side"><div class="brand">CreatorVerwaltung</div><div class="nav" id="nav">
   <button data-page="dashboard" class="active">Dashboard</button><button data-page="creators">Creator</button><button data-page="live">Live jetzt</button>
   <button data-page="warns">Creator Warns</button><button data-page="calendar">Termine</button><button data-page="tasks">Meine Aufgaben</button>
-  <button data-page="settings" class="owner-only">Baukasten</button><button data-page="access" class="owner-only">Zugriffsverwaltung</button>
+  <button data-page="settings">Baukasten</button><button data-page="access" class="owner-only">Zugriffsverwaltung</button>
  </div><div class="side-bottom"><div id="who" class="pill"></div><button id="logout" class="btn secondary" style="width:100%;margin-top:10px">Abmelden</button></div></aside>
  <main class="main"><div class="top"><div><h1 id="pageTitle">Dashboard</h1><div class="muted" id="subtitle">Deine Creator-Verwaltung auf einen Blick.</div></div><div class="pill" id="rolePill"></div></div><div id="content"></div></main>
 </div>
@@ -37,7 +37,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
 const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[];
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[];
 
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
@@ -93,13 +93,14 @@ async function boot(){
 }
 function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
 async function reload(){
-  const [c,w,e,t,cat,a] = await Promise.all([
+  const [c,w,e,t,cat,a,p] = await Promise.all([
     sb.from("cv_creators").select("*").order("name"),
     sb.from("cv_warns").select("*").order("created_at",{ascending:false}),
     sb.from("cv_events").select("*").order("event_date"),
     sb.from("cv_tasks").select("*").order("done").order("due_date"),
     sb.from("cv_categories").select("*").order("position"),
-    sb.from("cv_access").select("*").order("created_at")
+    sb.from("cv_access").select("*").order("created_at"),
+    sb.from("cv_permissions").select("*")
   ]);
 
   creators = c.data || [];
@@ -108,9 +109,59 @@ async function reload(){
   tasks = t.data || [];
   categories = cat.data || [];
   accesses = a.data || [];
+  permissions = p.data || [];
+  applyPermissionUI();
 }
+
+function myPermissions(){
+  if(access?.role === "owner") return null;
+  return permissions.find(p => String(p.discord_id) === String(access?.discord_id)) || {};
+}
+
+function hasPerm(name){
+  if(access?.role === "owner") return true;
+  return myPermissions()?.[name] === true;
+}
+
+function applyPermissionUI(){
+  const rules = {
+    creators: "creator_view",
+    live: "live_view",
+    warns: "warns_view",
+    calendar: "events_view",
+    tasks: "tasks_view",
+    settings: "builder_view"
+  };
+
+  document.querySelectorAll("#nav button[data-page]").forEach(btn => {
+    const page = btn.dataset.page;
+    if(page === "dashboard"){
+      btn.classList.remove("hidden");
+      return;
+    }
+    if(page === "access"){
+      btn.classList.toggle("hidden", access?.role !== "owner");
+      return;
+    }
+    const permission = rules[page];
+    btn.classList.toggle("hidden", permission ? !hasPerm(permission) : false);
+  });
+}
+
+function permissionDenied(){
+  return `<div class="card empty">Für diesen Bereich hast du keine Berechtigung.</div>`;
+}
+
 function setPageTitle(p){const m={dashboard:["Dashboard","Deine Creator-Verwaltung auf einen Blick."],creators:["Creator","Profile, Links, Statistiken und interne Informationen."],live:["Live jetzt","Aktuelle Streams und gespeicherte Peak-Zuschauer."],warns:["Creator Warns","Warnungen und Laufzeiten übersichtlich verwalten."],calendar:["Termine","Persönliche und gemeinsame Termine."],tasks:["Meine Aufgaben","Deine privaten To-dos."],settings:["Baukasten","Kategorien der Verwaltung selbst organisieren."],access:["Zugriffsverwaltung","Du entscheidest, welche Discord-Accounts Zugriff haben."]};$("#pageTitle").textContent=m[p][0];$("#subtitle").textContent=m[p][1]}
-function render(p){setPageTitle(p);document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p)); const fn={dashboard:dash,creators:creatorPage,live:livePage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,access:accessPage}[p];$("#content").innerHTML=fn()}
+function render(p){
+  const pagePerms={creators:"creator_view",live:"live_view",warns:"warns_view",calendar:"events_view",tasks:"tasks_view",settings:"builder_view"};
+  if(p==="access" && access.role!=="owner") p="dashboard";
+  if(pagePerms[p] && !hasPerm(pagePerms[p])) p="dashboard";
+  setPageTitle(p);
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));
+  const fn={dashboard:dash,creators:creatorPage,live:livePage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,access:accessPage}[p];
+  $("#content").innerHTML=fn();
+}
 function dash(){let live=creators.filter(c=>c.is_live).length;return `<div class="grid">
 ${metric("Probe Streamer",creators.filter(c=>c.rank==="Probe Streamer").length)}${metric("Streamer",creators.filter(c=>c.rank==="Streamer").length)}${metric("Creator",creators.filter(c=>c.rank==="Creator").length)}${metric("Aktive Warns",warns.filter(w=>new Date(w.expires_at)>new Date()).length)}
 </div><div class="section"><div class="section-head"><h2>30-Tage-Aktivität</h2><span class="pill">${live} live</span></div>${creatorTable(creators.slice(0,8))}</div>`}
@@ -131,7 +182,7 @@ function creatorTable(arr){
             <th>Tage</th>
             <th>Ø Zuschauer</th>
             <th>Peak</th>
-            <th>Aktionen</th>
+            ${hasPerm("creator_edit") ? "<th>Aktionen</th>" : ""}
           </tr>
         </thead>
         <tbody>
@@ -143,11 +194,9 @@ function creatorTable(arr){
               <td>${c.twitch_days_30d ?? 0}</td>
               <td>${c.twitch_avg_viewers_30d ?? 0}</td>
               <td>${c.twitch_peak_viewers_30d ?? 0}</td>
-              <td>
-                <button class="btn secondary" onclick="editCreator('${c.id}')">
-                  ✎ Bearbeiten
-                </button>
-              </td>
+              ${hasPerm("creator_edit") ? `<td>
+                <button class="btn secondary" onclick="editCreator('${c.id}')">✎ Bearbeiten</button>
+              </td>` : ""}
             </tr>
           `).join("")}
         </tbody>
@@ -155,9 +204,15 @@ function creatorTable(arr){
     </div>
   `;
 }
-function creatorPage(){return `<div class="section-head"><h2>Alle Creator</h2><button class="btn" onclick="creatorModal()">+ Creator anlegen</button></div>${creatorTable(creators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden. Notizen und Verlauf werden im Creator-Profil weiter ausgebaut.</div>`}
+function creatorPage(){
+  if(!hasPerm("creator_view")) return permissionDenied();
+  return `<div class="section-head"><h2>Alle Creator</h2>${hasPerm("creator_create")?`<button class="btn" onclick="creatorModal()">+ Creator anlegen</button>`:""}</div>${creatorTable(creators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden.</div>`;
+}
 function livePage(){return `<div class="grid">${metric("Gerade live",0)}${metric("Höchster 30T-Peak",Math.max(0,...creators.map(c=>c.twitch_peak_viewers_30d||0)))}${metric("Erfasste Creator",creators.length)}${metric("Plattform","Twitch")}</div><div class="section card empty">Die Live-Abfrage wird im nächsten Integrationsschritt mit der Twitch API verbunden. Die Datenbank für Live-Sessions und Peaks ist bereits vorbereitet.</div>`}
-function warnPage(){return `<div class="section-head"><h2>Warnungen</h2><button class="btn" onclick="warnModal()">+ Warn hinzufügen</button></div>${warns.length?`<div class="table-wrap"><table><thead><tr><th>Creator</th><th>Grund</th><th>Dauer</th><th>Endet</th></tr></thead><tbody>${warns.map(w=>`<tr><td>${esc(creators.find(c=>c.id===w.creator_id)?.name||"—")}</td><td>${esc(w.reason)}</td><td>${w.duration_days} Tage</td><td>${new Date(w.expires_at).toLocaleDateString("de-DE")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Keine Warnungen vorhanden.</div>`}`}
+function warnPage(){
+  if(!hasPerm("warns_view")) return permissionDenied();
+  return `<div class="section-head"><h2>Warnungen</h2>${hasPerm("warns_create")?`<button class="btn" onclick="warnModal()">+ Warn hinzufügen</button>`:""}</div>${warns.length?`<div class="table-wrap"><table><thead><tr><th>Creator</th><th>Grund</th><th>Dauer</th><th>Endet</th></tr></thead><tbody>${warns.map(w=>`<tr><td>${esc(creators.find(c=>c.id===w.creator_id)?.name||"—")}</td><td>${esc(w.reason)}</td><td>${w.duration_days} Tage</td><td>${new Date(w.expires_at).toLocaleDateString("de-DE")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Keine Warnungen vorhanden.</div>`}`;
+}`}
 function eventPage(){return `<div class="section-head"><h2>Termine</h2><button class="btn" onclick="eventModal()">+ Termin</button></div>${events.length?`<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Termin</th><th>Sichtbarkeit</th></tr></thead><tbody>${events.map(e=>`<tr><td>${esc(e.event_date)} ${esc(e.event_time||"")}</td><td>${esc(e.title)}</td><td>${e.visibility==="team"?"Team":"Nur ich"}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Noch keine Termine.</div>`}`}
 function taskPage(){return `<div class="section-head"><h2>Meine Aufgaben</h2><button class="btn" onclick="taskModal()">+ Aufgabe</button></div>${tasks.length?tasks.map(t=>`<div class="card" style="margin-bottom:10px"><b>${esc(t.title)}</b><div class="muted small">${esc(t.priority)} · ${esc(t.due_date||"ohne Termin")}</div></div>`).join(""):`<div class="card empty">Du hast noch keine Aufgaben.</div>`}`}
 function settingsPage(){if(access.role!=="owner")return "";return `<div class="section-head"><h2>Kategorien</h2><button class="btn" onclick="categoryModal()">+ Kategorie</button></div>${categories.map(c=>`<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between"><span>${esc(c.name)}</span><span class="muted">${c.visible?"Sichtbar":"Ausgeblendet"}</span></div>`).join("")}<div class="notice">Der Baukasten wird später zusätzlich um frei definierbare Creator-Felder erweitert.</div>`}
@@ -184,6 +239,7 @@ function accessPage(){
 
               <div style="display:flex;gap:8px;align-items:center">
                 <div class="pill">${roleName}</div>
+                ${a.role!=="owner" ? `<button class="btn secondary" onclick="permissionModal('${esc(a.discord_id)}')">⚙ Berechtigungen</button>` : ""}
               </div>
             </div>
           </div>
@@ -206,9 +262,98 @@ function accessPage(){
     </div>
   `;
 }
+
+const permissionGroups = [
+  ["Creator",[
+    ["creator_view","Ansehen"],
+    ["creator_create","Anlegen"],
+    ["creator_edit","Bearbeiten"],
+    ["creator_delete","Löschen"]
+  ]],
+  ["Creator Warns",[
+    ["warns_view","Ansehen"],
+    ["warns_create","Warn hinzufügen"],
+    ["warns_delete","Warn löschen"]
+  ]],
+  ["Live",[
+    ["live_view","Ansehen"]
+  ]],
+  ["Termine",[
+    ["events_view","Ansehen"],
+    ["events_create","Anlegen"],
+    ["events_edit","Bearbeiten"],
+    ["events_delete","Löschen"]
+  ]],
+  ["Aufgaben",[
+    ["tasks_view","Ansehen"],
+    ["tasks_create","Anlegen"],
+    ["tasks_edit","Bearbeiten"],
+    ["tasks_delete","Löschen"]
+  ]],
+  ["Baukasten",[
+    ["builder_view","Ansehen"],
+    ["builder_edit","Bearbeiten"]
+  ]]
+];
+
+function permissionModal(discordId){
+  const a = accesses.find(x => String(x.discord_id) === String(discordId));
+  const current = permissions.find(x => String(x.discord_id) === String(discordId)) || {};
+
+  const groups = permissionGroups.map(([title,items]) => `
+    <div class="card" style="margin-bottom:10px">
+      <b>${title}</b>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px">
+        ${items.map(([key,label]) => `
+          <label style="display:flex;gap:9px;align-items:center;cursor:pointer">
+            <input type="checkbox" id="perm_${key}" ${current[key]===true?"checked":""}>
+            <span>${label}</span>
+          </label>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  modal(
+    `Berechtigungen – ${esc(a?.display_name || a?.discord_username || discordId)}`,
+    `<div class="notice">Du entscheidest selbst, welche Bereiche dieser Discord-Account sehen oder verändern darf.</div>
+     <div class="actions" style="margin:12px 0">
+       <button class="btn secondary" type="button" onclick="setAllPermissions(true)">Alle erlauben</button>
+       <button class="btn secondary" type="button" onclick="setAllPermissions(false)">Alle entfernen</button>
+     </div>
+     ${groups}`,
+    `savePermissions('${discordId}')`
+  );
+}
+
+function setAllPermissions(value){
+  permissionGroups.flatMap(x=>x[1]).forEach(([key])=>{
+    const el = $("#perm_"+key);
+    if(el) el.checked = value;
+  });
+}
+
+async function savePermissions(discordId){
+  const row = {discord_id: String(discordId), updated_at: new Date().toISOString()};
+  permissionGroups.flatMap(x=>x[1]).forEach(([key])=>{
+    row[key] = !!$("#perm_"+key)?.checked;
+  });
+
+  const {error} = await sb.from("cv_permissions").upsert(row,{onConflict:"discord_id"});
+  if(error){
+    console.error(error);
+    alert("Berechtigungen konnten nicht gespeichert werden: " + error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("access");
+}
+
 function modal(title,body,save){$("#modalRoot").innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><b>${title}</b><button class="btn secondary" onclick="closeModal()">✕</button></div>${body}<div class="actions" style="margin-top:18px"><button class="btn" onclick="${save}">Speichern</button><button class="btn secondary" onclick="closeModal()">Abbrechen</button></div></div></div>`}
 function closeModal(){$("#modalRoot").innerHTML=""}
-function creatorModal(){modal("Creator anlegen",`<div class="form-grid">${f("cname","Name")}${sel("crank","Rang",["Probe Streamer","Streamer","Creator"])}${f("cdiscord","Discord-ID")}${f("ctwitch","Twitch-Link")}${f("ctiktok","TikTok-Link")}${f("cjoined","Dabei seit","date")}<div class="field full"><label>Interne Info</label><textarea id="csummary"></textarea></div></div>`,"saveCreator()")}
+function creatorModal(){if(!hasPerm("creator_create"))return alert("Keine Berechtigung.");modal("Creator anlegen",`<div class="form-grid">${f("cname","Name")}${sel("crank","Rang",["Probe Streamer","Streamer","Creator"])}${f("cdiscord","Discord-ID")}${f("ctwitch","Twitch-Link")}${f("ctiktok","TikTok-Link")}${f("cjoined","Dabei seit","date")}<div class="field full"><label>Interne Info</label><textarea id="csummary"></textarea></div></div>`,"saveCreator()")}
  async function saveCreator(){
   const name = $("#cname").value.trim();
   const rank = $("#crank").value;
@@ -245,6 +390,7 @@ function creatorModal(){modal("Creator anlegen",`<div class="form-grid">${f("cna
 }
 
 function editCreator(id){
+  if(!hasPerm("creator_edit")){ alert("Keine Berechtigung."); return; }
   const c = creators.find(x => x.id === id);
   if(!c){ alert("Creator wurde nicht gefunden."); return; }
 
@@ -304,6 +450,7 @@ async function updateCreator(id){
 }
 
 function warnModal(){
+  if(!hasPerm("warns_create")){ alert("Keine Berechtigung."); return; }
   if(!creators.length){
     alert("Bitte zuerst einen Creator anlegen.");
     return;
