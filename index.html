@@ -189,7 +189,8 @@ function creatorTable(arr){
 }
 function creatorPage(){
   if(!hasPerm("creator_view")) return permissionDenied();
-  return `<div class="section-head"><h2>Alle Creator</h2>${hasPerm("creator_create")?`<button class="btn" onclick="creatorModal()">+ Creator anlegen</button>`:""}</div>${creatorTable(creators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden.</div>`;
+  const activeCreators=creators.filter(c=>!c.archived);
+  return `<div class="section-head"><h2>Alle Creator</h2>${hasPerm("creator_create")?`<button class="btn" onclick="creatorModal()">+ Creator anlegen</button>`:""}</div>${creatorTable(activeCreators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden.</div>`;
 }
 function livePage(){return `<div class="grid">${metric("Gerade live",0)}${metric("Höchster 30T-Peak",Math.max(0,...creators.map(c=>c.twitch_peak_viewers_30d||0)))}${metric("Erfasste Creator",creators.length)}${metric("Plattform","Twitch")}</div><div class="section card empty">Die Live-Abfrage wird im nächsten Integrationsschritt mit der Twitch API verbunden. Die Datenbank für Live-Sessions und Peaks ist bereits vorbereitet.</div>`}
 function warnPage(){
@@ -197,17 +198,18 @@ function warnPage(){
 
   const canEdit=hasPerm("warns_edit");
   const canDelete=hasPerm("warns_delete");
+  const activeWarns=warns.filter(w=>!w.archived);
 
   return `<div class="section-head">
     <h2>Warnungen</h2>
     ${hasPerm("warns_create")?`<button class="btn" onclick="warnModal()">+ Warn hinzufügen</button>`:""}
   </div>
-  ${warns.length?`<div class="table-wrap"><table>
+  ${activeWarns.length?`<div class="table-wrap"><table>
     <thead><tr>
       <th>Creator</th><th>Grund</th><th>Dauer</th><th>Endet</th><th>Status</th>
       ${(canEdit||canDelete)?"<th>Aktionen</th>":""}
     </tr></thead>
-    <tbody>${warns.map(w=>{
+    <tbody>${activeWarns.map(w=>{
       const active=new Date(w.expires_at)>new Date();
       return `<tr>
         <td>${esc(creators.find(c=>c.id===w.creator_id)?.name||"—")}</td>
@@ -272,71 +274,62 @@ function settingsPage(){
 function archivePage(){
   if(access?.role!=="owner") return permissionDenied();
 
-  const archivedEvents=events
-    .filter(e=>e.archived)
-    .sort((a,b)=>new Date(b.archived_at||0)-new Date(a.archived_at||0));
+  const archivedEvents=events.filter(e=>e.archived).sort((a,b)=>new Date(b.archived_at||0)-new Date(a.archived_at||0));
+  const archivedCreators=creators.filter(c=>c.archived).sort((a,b)=>new Date(b.archived_at||0)-new Date(a.archived_at||0));
+  const archivedWarns=warns.filter(w=>w.archived).sort((a,b)=>new Date(b.archived_at||0)-new Date(a.archived_at||0));
 
-  return `<div class="section-head">
-    <h2>Archiv</h2>
-    <span class="pill">30 Tage Aufbewahrung</span>
-  </div>
-  <div class="notice">
-    Gelöschte Termine bleiben hier bis zu 30 Tage nachvollziehbar. Du kannst sie wiederherstellen oder sofort endgültig löschen.
-  </div>
-  <div class="section">
-    <div class="section-head"><h2>Archivierte Termine</h2><span class="pill">${archivedEvents.length}</span></div>
-    ${archivedEvents.length?`<div class="table-wrap"><table>
-      <thead><tr>
-        <th>Termin</th><th>Datum</th><th>Erstellt von</th><th>Gelöscht von</th><th>Gelöscht am</th><th>Aktionen</th>
-      </tr></thead>
-      <tbody>${archivedEvents.map(e=>`<tr>
-        <td><b>${esc(e.title)}</b>${e.description?`<div class="muted small" style="margin-top:4px">${esc(e.description)}</div>`:""}</td>
-        <td>${esc(e.event_date)} ${esc(e.event_time||"")}</td>
-        <td>${esc(e.created_by_name||"–")}</td>
-        <td>${esc(e.archived_by_name||"–")}</td>
-        <td>${e.archived_at?new Date(e.archived_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–"}</td>
-        <td><div class="actions">
-          <button class="btn secondary" onclick="restoreEvent('${e.id}')">↩ Wiederherstellen</button>
-          <button class="btn danger" onclick="permanentlyDeleteEvent('${e.id}')">✕ Endgültig löschen</button>
-        </div></td>
-      </tr>`).join("")}</tbody>
-    </table></div>`:`<div class="card empty">Das Archiv ist leer.</div>`}
-  </div>`;
+  return `<div class="section-head"><h2>Archiv</h2><span class="pill">30 Tage Aufbewahrung</span></div>
+  <div class="notice">Gelöschte Creator, Creator-Warns und Termine bleiben hier nachvollziehbar und können wiederhergestellt oder endgültig gelöscht werden.</div>
+
+  ${archiveSection("Creator",archivedCreators.map(c=>`
+    <tr><td><b>${esc(c.name)}</b></td><td>${esc(c.rank||"–")}</td><td>${esc(c.created_by_name||"–")}</td>
+    <td>${esc(c.archived_by_name||"–")}</td><td>${archiveDate(c.archived_at)}</td>
+    <td><div class="actions"><button class="btn secondary" onclick="restoreCreator('${c.id}')">↩ Wiederherstellen</button>
+    <button class="btn danger" onclick="permanentlyDeleteCreator('${c.id}')">✕ Endgültig löschen</button></div></td></tr>`).join(""),
+    "<th>Name</th><th>Rang</th><th>Erstellt von</th><th>Gelöscht von</th><th>Gelöscht am</th><th>Aktionen</th>")}
+
+  ${archiveSection("Creator-Warns",archivedWarns.map(w=>`
+    <tr><td><b>${esc(creators.find(c=>c.id===w.creator_id)?.name||"–")}</b></td><td>${esc(w.reason)}</td><td>${w.duration_days} Tage</td>
+    <td>${esc(w.archived_by_name||"–")}</td><td>${archiveDate(w.archived_at)}</td>
+    <td><div class="actions"><button class="btn secondary" onclick="restoreWarn('${w.id}')">↩ Wiederherstellen</button>
+    <button class="btn danger" onclick="permanentlyDeleteWarn('${w.id}')">✕ Endgültig löschen</button></div></td></tr>`).join(""),
+    "<th>Creator</th><th>Grund</th><th>Dauer</th><th>Gelöscht von</th><th>Gelöscht am</th><th>Aktionen</th>")}
+
+  ${archiveSection("Termine",archivedEvents.map(e=>`
+    <tr><td><b>${esc(e.title)}</b>${e.description?`<div class="muted small">${esc(e.description)}</div>`:""}</td>
+    <td>${esc(e.event_date)} ${esc(e.event_time||"")}</td><td>${esc(e.created_by_name||"–")}</td>
+    <td>${esc(e.archived_by_name||"–")}</td><td>${archiveDate(e.archived_at)}</td>
+    <td><div class="actions"><button class="btn secondary" onclick="restoreEvent('${e.id}')">↩ Wiederherstellen</button>
+    <button class="btn danger" onclick="permanentlyDeleteEvent('${e.id}')">✕ Endgültig löschen</button></div></td></tr>`).join(""),
+    "<th>Termin</th><th>Datum</th><th>Erstellt von</th><th>Gelöscht von</th><th>Gelöscht am</th><th>Aktionen</th>")}`;
 }
 
-async function restoreEvent(id){
-  if(access?.role!=="owner") return alert("Keine Berechtigung.");
-  const e=events.find(x=>x.id===id);
-  if(!e) return alert("Termin wurde nicht gefunden.");
-  if(!confirm(`Termin "${e.title}" wiederherstellen?`)) return;
-
-  const {error}=await sb.rpc("cv_restore_event",{p_id:id});
-  if(error){
-    console.error(error);
-    alert("Termin konnte nicht wiederhergestellt werden: "+error.message);
-    return;
-  }
-
-  await reload();
-  render("archive");
+function archiveDate(v){return v?new Date(v).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–"}
+function archiveSection(title,rows,heads){
+  return `<div class="section"><div class="section-head"><h2>${title}</h2></div>
+  ${rows?`<div class="table-wrap"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>`:`<div class="card empty">Keine archivierten ${title}.</div>`}</div>`;
 }
 
-async function permanentlyDeleteEvent(id){
+async function restoreEvent(id){return archiveRpc("cv_restore_event",id,"Termin","wiederhergestellt")}
+async function permanentlyDeleteEvent(id){return archivePermanent("cv_permanently_delete_event",id,"Termin")}
+async function restoreCreator(id){return archiveRpc("cv_restore_creator",id,"Creator","wiederhergestellt")}
+async function permanentlyDeleteCreator(id){return archivePermanent("cv_permanently_delete_creator",id,"Creator")}
+async function restoreWarn(id){return archiveRpc("cv_restore_warn",id,"Warn","wiederhergestellt")}
+async function permanentlyDeleteWarn(id){return archivePermanent("cv_permanently_delete_warn",id,"Warn")}
+
+async function archiveRpc(fn,id,label){
   if(access?.role!=="owner") return alert("Keine Berechtigung.");
-  const e=events.find(x=>x.id===id);
-  if(!e) return alert("Termin wurde nicht gefunden.");
-
-  if(!confirm(`Termin "${e.title}" wirklich ENDGÜLTIG löschen?\n\nDanach kann er nicht wiederhergestellt werden.`)) return;
-
-  const {error}=await sb.rpc("cv_permanently_delete_event",{p_id:id});
-  if(error){
-    console.error(error);
-    alert("Termin konnte nicht endgültig gelöscht werden: "+error.message);
-    return;
-  }
-
-  await reload();
-  render("archive");
+  if(!confirm(`${label} wirklich wiederherstellen?`)) return;
+  const {error}=await sb.rpc(fn,{p_id:id});
+  if(error){console.error(error);alert(`${label} konnte nicht wiederhergestellt werden: `+error.message);return;}
+  await reload();render("archive");
+}
+async function archivePermanent(fn,id,label){
+  if(access?.role!=="owner") return alert("Keine Berechtigung.");
+  if(!confirm(`${label} wirklich ENDGÜLTIG löschen?\n\nDanach kann der Eintrag nicht wiederhergestellt werden.`)) return;
+  const {error}=await sb.rpc(fn,{p_id:id});
+  if(error){console.error(error);alert(`${label} konnte nicht endgültig gelöscht werden: `+error.message);return;}
+  await reload();render("archive");
 }
 
 function accessPage(){
@@ -624,7 +617,8 @@ async function deleteCreator(id){
 
 function warnModal(){
   if(!hasPerm("warns_create")){alert("Keine Berechtigung.");return;}
-  if(!creators.length){
+  const activeCreators=creators.filter(c=>!c.archived);
+  if(!activeCreators.length){
     alert("Bitte zuerst einen Creator anlegen.");
     return;
   }
@@ -632,7 +626,7 @@ function warnModal(){
   modal(
     "Creator Warn",
     `<div class="form-grid">
-      ${selObj("wcreator","Creator",creators)}
+      ${selObj("wcreator","Creator",activeCreators)}
       ${f("wreason","Grund")}
       ${f("wdays","Dauer in Tagen","number")}
       <div class="field full">
