@@ -169,7 +169,7 @@ function creatorTable(arr){
   return `<div class="table-wrap"><table>
     <thead><tr>
       <th>Name</th><th>Rang</th><th>Twitch</th><th>Tage</th><th>Ø Zuschauer</th><th>Peak</th>
-      ${hasPerm("creator_edit") ? "<th>Aktionen</th>" : ""}
+      ${(hasPerm("creator_edit")||hasPerm("creator_delete")) ? "<th>Aktionen</th>" : ""}
     </tr></thead>
     <tbody>${arr.map(c=>`<tr>
       <td><b>${esc(c.name)}</b></td>
@@ -178,7 +178,10 @@ function creatorTable(arr){
       <td>${c.twitch_days_30d ?? 0}</td>
       <td>${c.twitch_avg_viewers_30d ?? 0}</td>
       <td>${c.twitch_peak_viewers_30d ?? 0}</td>
-      ${hasPerm("creator_edit")?`<td><button class="btn secondary" onclick="editCreator('${c.id}')">✎ Bearbeiten</button></td>`:""}
+      ${(hasPerm("creator_edit")||hasPerm("creator_delete"))?`<td><div class="actions">
+        ${hasPerm("creator_edit")?`<button class="btn secondary" onclick="editCreator('${c.id}')">✎ Bearbeiten</button>`:""}
+        ${hasPerm("creator_delete")?`<button class="btn danger" onclick="deleteCreator('${c.id}')">✕ Löschen</button>`:""}
+      </div></td>`:""}
     </tr>`).join("")}</tbody>
   </table></div>`;
 }
@@ -452,6 +455,31 @@ async function updateCreator(id){
   }
 
   closeModal();
+  await reload();
+  render("creators");
+}
+
+async function deleteCreator(id){
+  if(!hasPerm("creator_delete")) return alert("Keine Berechtigung.");
+
+  const c=creators.find(x=>x.id===id);
+  if(!c) return alert("Creator wurde nicht gefunden.");
+
+  const relatedWarns=warns.filter(w=>w.creator_id===id).length;
+  const extra=relatedWarns
+    ? `\n\nDabei werden auch ${relatedWarns} zugehörige Warn${relatedWarns===1?"":"s"} gelöscht.`
+    : "";
+
+  if(!confirm(`Creator "${c.name}" wirklich vollständig löschen?${extra}`)) return;
+
+  const {error}=await sb.rpc("cv_delete_creator",{p_id:id});
+
+  if(error){
+    console.error(error);
+    alert("Creator konnte nicht gelöscht werden: "+error.message);
+    return;
+  }
+
   await reload();
   render("creators");
 }
