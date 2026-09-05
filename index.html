@@ -303,8 +303,61 @@ async function updateCreator(id){
   render("creators");
 }
 
-function warnModal(){modal("Creator Warn",`<div class="form-grid">${selObj("wcreator","Creator",creators)}${f("wreason","Grund")} ${f("wdays","Dauer in Tagen","number")}</div>`,"saveWarn()")}
-async function saveWarn(){let d=Math.max(1,Number($("#wdays").value||1)),start=new Date(),end=new Date(start.getTime()+d*86400000);await sb.from("cv_warns").insert({creator_id:$("#wcreator").value,reason:$("#wreason").value,duration_days:d,starts_at:start.toISOString(),expires_at:end.toISOString(),created_by:me.id});closeModal();await reload();render("warns")}
+function warnModal(){
+  if(!creators.length){
+    alert("Bitte zuerst einen Creator anlegen.");
+    return;
+  }
+
+  modal(
+    "Creator Warn",
+    `<div class="form-grid">
+      ${selObj("wcreator","Creator",creators)}
+      ${f("wreason","Grund")}
+      ${f("wdays","Dauer in Tagen","number")}
+      <div class="field full">
+        <div class="notice" style="margin:0">
+          Das Ablaufdatum wird automatisch aus der eingegebenen Dauer berechnet.
+        </div>
+      </div>
+    </div>`,
+    "saveWarn()"
+  );
+
+  $("#wdays").min = "1";
+  $("#wdays").value = "14";
+}
+async function saveWarn(){
+  const creatorId = $("#wcreator").value;
+  const reason = $("#wreason").value.trim();
+  const durationDays = Math.max(1, Number($("#wdays").value || 1));
+
+  if(!creatorId){
+    alert("Bitte einen Creator auswählen.");
+    return;
+  }
+
+  if(!reason){
+    alert("Bitte einen Grund eintragen.");
+    return;
+  }
+
+  const {error} = await sb.rpc("cv_add_warn", {
+    p_creator_id: creatorId,
+    p_reason: reason,
+    p_duration_days: durationDays
+  });
+
+  if(error){
+    console.error(error);
+    alert("Warn konnte nicht gespeichert werden: " + error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("warns");
+}
 function eventModal(){modal("Termin anlegen",`<div class="form-grid">${f("etitle","Titel")}${f("edate","Datum","date")}${f("etime","Uhrzeit","time")}${sel("evis","Sichtbarkeit",["personal","team"])}<div class="field full"><label>Beschreibung</label><textarea id="edesc"></textarea></div></div>`,"saveEvent()")}
 async function saveEvent(){await sb.from("cv_events").insert({owner_id:me.id,title:$("#etitle").value,event_date:$("#edate").value,event_time:$("#etime").value||null,description:$("#edesc").value||null,visibility:$("#evis").value});closeModal();await reload();render("calendar")}
 function taskModal(){modal("Aufgabe anlegen",`<div class="form-grid">${f("ttitle","Aufgabe")}${f("tdue","Fällig am","date")}${sel("tprio","Priorität",["Niedrig","Normal","Hoch"])}<div class="field full"><label>Notiz</label><textarea id="tnote"></textarea></div></div>`,"saveTask()")}
