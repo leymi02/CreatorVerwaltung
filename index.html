@@ -115,7 +115,46 @@ function dash(){let live=creators.filter(c=>c.is_live).length;return `<div class
 ${metric("Probe Streamer",creators.filter(c=>c.rank==="Probe Streamer").length)}${metric("Streamer",creators.filter(c=>c.rank==="Streamer").length)}${metric("Creator",creators.filter(c=>c.rank==="Creator").length)}${metric("Aktive Warns",warns.filter(w=>new Date(w.expires_at)>new Date()).length)}
 </div><div class="section"><div class="section-head"><h2>30-Tage-Aktivität</h2><span class="pill">${live} live</span></div>${creatorTable(creators.slice(0,8))}</div>`}
 function metric(a,b){return `<div class="card metric"><span class="muted">${a}</span><b>${b}</b></div>`}
-function creatorTable(arr){if(!arr.length)return `<div class="card empty">Noch keine Creator angelegt.</div>`;return `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Rang</th><th>Twitch 30T</th><th>Tage</th><th>Ø Zuschauer</th><th>Peak</th></tr></thead><tbody>${arr.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.rank)}</td><td>${c.twitch_hours_30d||0} h</td><td>${c.twitch_days_30d||0}/30</td><td>${c.twitch_avg_viewers_30d||0}</td><td>${c.twitch_peak_viewers_30d||0}</td></tr>`).join("")}</tbody></table></div>`}
+function creatorTable(arr){
+  if(!arr.length){
+    return `<div class="card empty">Noch keine Creator angelegt.</div>`;
+  }
+
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Rang</th>
+            <th>Twitch</th>
+            <th>Tage</th>
+            <th>Ø Zuschauer</th>
+            <th>Peak</th>
+            <th>Aktionen</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${arr.map(c => `
+            <tr>
+              <td><b>${esc(c.name)}</b></td>
+              <td>${esc(c.rank)}</td>
+              <td>${c.twitch_url ? `<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>` : "–"}</td>
+              <td>${c.twitch_days_30d ?? 0}</td>
+              <td>${c.twitch_avg_viewers_30d ?? 0}</td>
+              <td>${c.twitch_peak_viewers_30d ?? 0}</td>
+              <td>
+                <button class="btn secondary" onclick="editCreator('${c.id}')">
+                  ✎ Bearbeiten
+                </button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
 function creatorPage(){return `<div class="section-head"><h2>Alle Creator</h2><button class="btn" onclick="creatorModal()">+ Creator anlegen</button></div>${creatorTable(creators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden. Notizen und Verlauf werden im Creator-Profil weiter ausgebaut.</div>`}
 function livePage(){return `<div class="grid">${metric("Gerade live",0)}${metric("Höchster 30T-Peak",Math.max(0,...creators.map(c=>c.twitch_peak_viewers_30d||0)))}${metric("Erfasste Creator",creators.length)}${metric("Plattform","Twitch")}</div><div class="section card empty">Die Live-Abfrage wird im nächsten Integrationsschritt mit der Twitch API verbunden. Die Datenbank für Live-Sessions und Peaks ist bereits vorbereitet.</div>`}
 function warnPage(){return `<div class="section-head"><h2>Warnungen</h2><button class="btn" onclick="warnModal()">+ Warn hinzufügen</button></div>${warns.length?`<div class="table-wrap"><table><thead><tr><th>Creator</th><th>Grund</th><th>Dauer</th><th>Endet</th></tr></thead><tbody>${warns.map(w=>`<tr><td>${esc(creators.find(c=>c.id===w.creator_id)?.name||"—")}</td><td>${esc(w.reason)}</td><td>${w.duration_days} Tage</td><td>${new Date(w.expires_at).toLocaleDateString("de-DE")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Keine Warnungen vorhanden.</div>`}`}
