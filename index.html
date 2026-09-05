@@ -189,7 +189,35 @@ function creatorPage(){
 function livePage(){return `<div class="grid">${metric("Gerade live",0)}${metric("Höchster 30T-Peak",Math.max(0,...creators.map(c=>c.twitch_peak_viewers_30d||0)))}${metric("Erfasste Creator",creators.length)}${metric("Plattform","Twitch")}</div><div class="section card empty">Die Live-Abfrage wird im nächsten Integrationsschritt mit der Twitch API verbunden. Die Datenbank für Live-Sessions und Peaks ist bereits vorbereitet.</div>`}
 function warnPage(){
   if(!hasPerm("warns_view")) return permissionDenied();
-  return `<div class="section-head"><h2>Warnungen</h2>${hasPerm("warns_create")?`<button class="btn" onclick="warnModal()">+ Warn hinzufügen</button>`:""}</div>${warns.length?`<div class="table-wrap"><table><thead><tr><th>Creator</th><th>Grund</th><th>Dauer</th><th>Endet</th></tr></thead><tbody>${warns.map(w=>`<tr><td>${esc(creators.find(c=>c.id===w.creator_id)?.name||"—")}</td><td>${esc(w.reason)}</td><td>${w.duration_days} Tage</td><td>${new Date(w.expires_at).toLocaleDateString("de-DE")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Keine Warnungen vorhanden.</div>`}`;
+
+  const canEdit=hasPerm("warns_edit");
+  const canDelete=hasPerm("warns_delete");
+
+  return `<div class="section-head">
+    <h2>Warnungen</h2>
+    ${hasPerm("warns_create")?`<button class="btn" onclick="warnModal()">+ Warn hinzufügen</button>`:""}
+  </div>
+  ${warns.length?`<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Creator</th><th>Grund</th><th>Dauer</th><th>Endet</th><th>Status</th>
+      ${(canEdit||canDelete)?"<th>Aktionen</th>":""}
+    </tr></thead>
+    <tbody>${warns.map(w=>{
+      const active=new Date(w.expires_at)>new Date();
+      return `<tr>
+        <td>${esc(creators.find(c=>c.id===w.creator_id)?.name||"—")}</td>
+        <td>${esc(w.reason)}</td>
+        <td>${w.duration_days} Tage</td>
+        <td>${new Date(w.expires_at).toLocaleDateString("de-DE")}</td>
+        <td><span class="pill">${active?"Aktiv":"Abgelaufen"}</span></td>
+        ${(canEdit||canDelete)?`<td><div class="actions">
+          ${canEdit?`<button class="btn secondary" onclick="editWarn('${w.id}')">✎ Bearbeiten</button>`:""}
+          ${canDelete?`<button class="btn danger" onclick="deleteWarn('${w.id}')">✕ Löschen</button>`:""}
+        </div></td>`:""}
+      </tr>`;
+    }).join("")}
+    </tbody>
+  </table></div>`:`<div class="card empty">Keine Warnungen vorhanden.</div>`}`;
 }
 function eventPage(){
   if(!hasPerm("events_view")) return permissionDenied();
@@ -254,7 +282,7 @@ function accessPage(){
 }
 const permissionGroups=[
   ["Creator",[["creator_view","Ansehen"],["creator_create","Anlegen"],["creator_edit","Bearbeiten"],["creator_delete","Löschen"]]],
-  ["Creator Warns",[["warns_view","Ansehen"],["warns_create","Warn hinzufügen"],["warns_delete","Warn löschen"]]],
+  ["Creator Warns",[["warns_view","Ansehen"],["warns_create","Warn hinzufügen"],["warns_edit","Warn bearbeiten"],["warns_delete","Warn löschen"]]],
   ["Live",[["live_view","Ansehen"]]],
   ["Termine",[["events_view","Ansehen"],["events_create","Anlegen"],["events_edit","Bearbeiten"],["events_delete","Löschen"]]],
   ["Aufgaben",[["tasks_view","Ansehen"],["tasks_create","Anlegen"],["tasks_edit","Bearbeiten"],["tasks_delete","Löschen"]]],
@@ -484,6 +512,70 @@ async function saveWarn(){
   await reload();
   render("warns");
 }
+function editWarn(id){
+  if(!hasPerm("warns_edit")) return alert("Keine Berechtigung.");
+  const w=warns.find(x=>x.id===id);
+  if(!w) return alert("Warn wurde nicht gefunden.");
+
+  modal("Creator Warn bearbeiten",`<div class="form-grid">
+    ${selObj("ewcreator","Creator",creators)}
+    ${f("ewreason","Grund")}
+    ${f("ewdays","Dauer in Tagen","number")}
+    <div class="field full"><div class="notice" style="margin:0">
+      Beim Speichern wird das Enddatum anhand des ursprünglichen Startdatums und der neuen Dauer neu berechnet.
+    </div></div>
+  </div>`,`updateWarn('${id}')`);
+
+  $("#ewcreator").value=w.creator_id||"";
+  $("#ewreason").value=w.reason||"";
+  $("#ewdays").value=w.duration_days||1;
+  $("#ewdays").min="1";
+}
+
+async function updateWarn(id){
+  if(!hasPerm("warns_edit")) return alert("Keine Berechtigung.");
+  const creatorId=$("#ewcreator").value;
+  const reason=$("#ewreason").value.trim();
+  const durationDays=Math.max(1,Number($("#ewdays").value||1));
+
+  if(!creatorId) return alert("Bitte einen Creator auswählen.");
+  if(!reason) return alert("Bitte einen Grund eintragen.");
+
+  const {error}=await sb.rpc("cv_update_warn",{
+    p_id:id,
+    p_creator_id:creatorId,
+    p_reason:reason,
+    p_duration_days:durationDays
+  });
+
+  if(error){
+    console.error(error);
+    alert("Warn konnte nicht geändert werden: "+error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("warns");
+}
+
+async function deleteWarn(id){
+  if(!hasPerm("warns_delete")) return alert("Keine Berechtigung.");
+  const w=warns.find(x=>x.id===id);
+  const creator=creators.find(c=>c.id===w?.creator_id)?.name||"Creator";
+  if(!confirm(`Warn von "${creator}" wirklich löschen?`)) return;
+
+  const {error}=await sb.rpc("cv_delete_warn",{p_id:id});
+  if(error){
+    console.error(error);
+    alert("Warn konnte nicht gelöscht werden: "+error.message);
+    return;
+  }
+
+  await reload();
+  render("warns");
+}
+
 function eventModal(){if(!hasPerm("events_create"))return alert("Keine Berechtigung.");modal("Termin anlegen",`<div class="form-grid">${f("etitle","Titel")}${f("edate","Datum","date")}${f("etime","Uhrzeit","time")}${sel("evis","Sichtbarkeit",["personal","team"])}<div class="field full"><label>Beschreibung</label><textarea id="edesc"></textarea></div></div>`,"saveEvent()")}
 async function saveEvent(){await sb.from("cv_events").insert({owner_id:me.id,title:$("#etitle").value,event_date:$("#edate").value,event_time:$("#etime").value||null,description:$("#edesc").value||null,visibility:$("#evis").value});closeModal();await reload();render("calendar")}
 function taskModal(){if(!hasPerm("tasks_create"))return alert("Keine Berechtigung.");modal("Aufgabe anlegen",`<div class="form-grid">${f("ttitle","Aufgabe")}${f("tdue","Fällig am","date")}${sel("tprio","Priorität",["Niedrig","Normal","Hoch"])}<div class="field full"><label>Notiz</label><textarea id="tnote"></textarea></div></div>`,"saveTask()")}
