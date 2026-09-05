@@ -415,7 +415,9 @@ function editCreator(id){
     <div class="field full">
       <div class="notice" style="margin:0">
         <b>Erstellt von:</b> ${esc(c.created_by_name || "Nicht gespeichert")}<br>
-        <b>Erstellt am:</b> ${c.created_at ? new Date(c.created_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "Nicht gespeichert"}
+        <b>Erstellt am:</b> ${c.created_at ? new Date(c.created_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "Nicht gespeichert"}<br><br>
+        <b>Zuletzt bearbeitet von:</b> ${esc(c.updated_by_name || "Noch nicht bearbeitet")}<br>
+        <b>Zuletzt bearbeitet am:</b> ${c.updated_by_name && c.updated_at ? new Date(c.updated_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "Noch nicht bearbeitet"}
       </div>
     </div>
   </div>`, `updateCreator('${id}')`);
