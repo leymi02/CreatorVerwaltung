@@ -269,17 +269,28 @@ function editCreator(id){
 
 async function updateCreator(id){
   const name = $("#ename").value.trim();
-  if(!name){ alert("Bitte einen Namen eintragen."); return; }
+  const rank = $("#erank").value;
+  const discordId = $("#ediscord").value.trim();
+  const twitchUrl = $("#etwitch").value.trim();
+  const tiktokUrl = $("#etiktok").value.trim();
+  const joinedAt = $("#ejoined").value || null;
+  const summary = $("#esummary").value.trim();
 
-  const {error} = await sb.from("cv_creators").update({
-    name,
-    rank: $("#erank").value,
-    discord_id: $("#ediscord").value.trim() || null,
-    twitch_url: $("#etwitch").value.trim() || null,
-    tiktok_url: $("#etiktok").value.trim() || null,
-    joined_at: $("#ejoined").value || null,
-    summary: $("#esummary").value.trim() || null
-  }).eq("id", id);
+  if(!name){
+    alert("Bitte einen Namen eintragen.");
+    return;
+  }
+
+  const {error} = await sb.rpc("cv_update_creator", {
+    p_id: id,
+    p_name: name,
+    p_rank: rank,
+    p_discord_id: discordId,
+    p_twitch_url: twitchUrl,
+    p_tiktok_url: tiktokUrl,
+    p_joined_at: joinedAt,
+    p_summary: summary
+  });
 
   if(error){
     console.error(error);
