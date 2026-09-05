@@ -37,7 +37,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
 const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[];
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[];
 
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
@@ -93,14 +93,15 @@ async function boot(){
 }
 function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
 async function reload(){
-  const [c,w,e,t,cat,a,p] = await Promise.all([
+  const [c,w,e,t,cat,a,p,h] = await Promise.all([
     sb.from("cv_creators").select("*").order("name"),
     sb.from("cv_warns").select("*").order("created_at",{ascending:false}),
     sb.from("cv_events").select("*").order("event_date"),
     sb.from("cv_tasks").select("*").order("done").order("due_date"),
     sb.from("cv_categories").select("*").order("position"),
     sb.from("cv_access").select("*").order("created_at"),
-    sb.from("cv_permissions").select("*")
+    sb.from("cv_permissions").select("*"),
+    sb.from("cv_creator_history").select("*").order("created_at",{ascending:false})
   ]);
 
   creators = c.data || [];
@@ -110,6 +111,7 @@ async function reload(){
   categories = cat.data || [];
   accesses = a.data || [];
   permissions = p.data || [];
+  creatorHistory = h.data || [];
   applyPermissionUI();
 }
 function myPermissions(){
@@ -399,6 +401,31 @@ function creatorModal(){if(!hasPerm("creator_create"))return alert("Keine Berech
   render("creators");
 }
 
+function historyValue(v){
+  if(v===null || v===undefined || v==="") return "–";
+  return esc(String(v));
+}
+
+function creatorHistoryHtml(creatorId){
+  const rows=creatorHistory.filter(h=>h.creator_id===creatorId);
+  if(!rows.length) return `<div class="muted small" style="margin-top:8px">Noch keine Änderungen gespeichert.</div>`;
+
+  return `<div style="margin-top:10px;display:grid;gap:10px">
+    ${rows.map(h=>{
+      const changes=h.changes||{};
+      const items=Object.entries(changes).map(([field,val])=>`
+        <div class="small" style="margin-top:4px">
+          <b>${esc(field)}:</b> ${historyValue(val?.alt)} → ${historyValue(val?.neu)}
+        </div>`).join("");
+
+      return `<div style="padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:#0f0d14">
+        <div class="small"><b>${esc(h.changed_by_name||"Unbekannt")}</b> · ${h.created_at?new Date(h.created_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–"}</div>
+        ${items}
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
 function editCreator(id){
   if(!hasPerm("creator_edit")){alert("Keine Berechtigung.");return;}
   const c = creators.find(x => x.id === id);
@@ -416,8 +443,8 @@ function editCreator(id){
       <div class="notice" style="margin:0">
         <b>Erstellt von:</b> ${esc(c.created_by_name || "Nicht gespeichert")}<br>
         <b>Erstellt am:</b> ${c.created_at ? new Date(c.created_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "Nicht gespeichert"}<br><br>
-        <b>Zuletzt bearbeitet von:</b> ${esc(c.updated_by_name || "Noch nicht bearbeitet")}<br>
-        <b>Zuletzt bearbeitet am:</b> ${c.updated_by_name && c.updated_at ? new Date(c.updated_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "Noch nicht bearbeitet"}
+        <b>Änderungsverlauf</b>
+        ${creatorHistoryHtml(c.id)}
       </div>
     </div>
   </div>`, `updateCreator('${id}')`);
