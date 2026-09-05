@@ -112,9 +112,8 @@ async function reload(){
   permissions = p.data || [];
   applyPermissionUI();
 }
-
 function myPermissions(){
-  if(access?.role === "owner") return null;
+  if(access?.role === "owner") return {};
   return permissions.find(p => String(p.discord_id) === String(access?.discord_id)) || {};
 }
 
@@ -125,26 +124,24 @@ function hasPerm(name){
 
 function applyPermissionUI(){
   const rules = {
-    creators: "creator_view",
-    live: "live_view",
-    warns: "warns_view",
-    calendar: "events_view",
-    tasks: "tasks_view",
-    settings: "builder_view"
+    creators:"creator_view",
+    live:"live_view",
+    warns:"warns_view",
+    calendar:"events_view",
+    tasks:"tasks_view",
+    settings:"builder_view"
   };
 
-  document.querySelectorAll("#nav button[data-page]").forEach(btn => {
-    const page = btn.dataset.page;
-    if(page === "dashboard"){
+  document.querySelectorAll("#nav button[data-page]").forEach(btn=>{
+    const page=btn.dataset.page;
+    if(page==="dashboard"){
       btn.classList.remove("hidden");
-      return;
+    }else if(page==="access"){
+      btn.classList.toggle("hidden",access?.role!=="owner");
+    }else{
+      const perm=rules[page];
+      btn.classList.toggle("hidden",perm ? !hasPerm(perm) : false);
     }
-    if(page === "access"){
-      btn.classList.toggle("hidden", access?.role !== "owner");
-      return;
-    }
-    const permission = rules[page];
-    btn.classList.toggle("hidden", permission ? !hasPerm(permission) : false);
   });
 }
 
@@ -154,9 +151,9 @@ function permissionDenied(){
 
 function setPageTitle(p){const m={dashboard:["Dashboard","Deine Creator-Verwaltung auf einen Blick."],creators:["Creator","Profile, Links, Statistiken und interne Informationen."],live:["Live jetzt","Aktuelle Streams und gespeicherte Peak-Zuschauer."],warns:["Creator Warns","Warnungen und Laufzeiten übersichtlich verwalten."],calendar:["Termine","Persönliche und gemeinsame Termine."],tasks:["Meine Aufgaben","Deine privaten To-dos."],settings:["Baukasten","Kategorien der Verwaltung selbst organisieren."],access:["Zugriffsverwaltung","Du entscheidest, welche Discord-Accounts Zugriff haben."]};$("#pageTitle").textContent=m[p][0];$("#subtitle").textContent=m[p][1]}
 function render(p){
-  const pagePerms={creators:"creator_view",live:"live_view",warns:"warns_view",calendar:"events_view",tasks:"tasks_view",settings:"builder_view"};
+  const perms={creators:"creator_view",live:"live_view",warns:"warns_view",calendar:"events_view",tasks:"tasks_view",settings:"builder_view"};
   if(p==="access" && access.role!=="owner") p="dashboard";
-  if(pagePerms[p] && !hasPerm(pagePerms[p])) p="dashboard";
+  if(perms[p] && !hasPerm(perms[p])) p="dashboard";
   setPageTitle(p);
   document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));
   const fn={dashboard:dash,creators:creatorPage,live:livePage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,access:accessPage}[p];
@@ -167,42 +164,23 @@ ${metric("Probe Streamer",creators.filter(c=>c.rank==="Probe Streamer").length)}
 </div><div class="section"><div class="section-head"><h2>30-Tage-Aktivität</h2><span class="pill">${live} live</span></div>${creatorTable(creators.slice(0,8))}</div>`}
 function metric(a,b){return `<div class="card metric"><span class="muted">${a}</span><b>${b}</b></div>`}
 function creatorTable(arr){
-  if(!arr.length){
-    return `<div class="card empty">Noch keine Creator angelegt.</div>`;
-  }
+  if(!arr.length) return `<div class="card empty">Noch keine Creator angelegt.</div>`;
 
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Rang</th>
-            <th>Twitch</th>
-            <th>Tage</th>
-            <th>Ø Zuschauer</th>
-            <th>Peak</th>
-            ${hasPerm("creator_edit") ? "<th>Aktionen</th>" : ""}
-          </tr>
-        </thead>
-        <tbody>
-          ${arr.map(c => `
-            <tr>
-              <td><b>${esc(c.name)}</b></td>
-              <td>${esc(c.rank)}</td>
-              <td>${c.twitch_url ? `<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>` : "–"}</td>
-              <td>${c.twitch_days_30d ?? 0}</td>
-              <td>${c.twitch_avg_viewers_30d ?? 0}</td>
-              <td>${c.twitch_peak_viewers_30d ?? 0}</td>
-              ${hasPerm("creator_edit") ? `<td>
-                <button class="btn secondary" onclick="editCreator('${c.id}')">✎ Bearbeiten</button>
-              </td>` : ""}
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
+  return `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Name</th><th>Rang</th><th>Twitch</th><th>Tage</th><th>Ø Zuschauer</th><th>Peak</th>
+      ${hasPerm("creator_edit") ? "<th>Aktionen</th>" : ""}
+    </tr></thead>
+    <tbody>${arr.map(c=>`<tr>
+      <td><b>${esc(c.name)}</b></td>
+      <td>${esc(c.rank)}</td>
+      <td>${c.twitch_url?`<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>`:"–"}</td>
+      <td>${c.twitch_days_30d ?? 0}</td>
+      <td>${c.twitch_avg_viewers_30d ?? 0}</td>
+      <td>${c.twitch_peak_viewers_30d ?? 0}</td>
+      ${hasPerm("creator_edit")?`<td><button class="btn secondary" onclick="editCreator('${c.id}')">✎ Bearbeiten</button></td>`:""}
+    </tr>`).join("")}</tbody>
+  </table></div>`;
 }
 function creatorPage(){
   if(!hasPerm("creator_view")) return permissionDenied();
@@ -212,10 +190,19 @@ function livePage(){return `<div class="grid">${metric("Gerade live",0)}${metric
 function warnPage(){
   if(!hasPerm("warns_view")) return permissionDenied();
   return `<div class="section-head"><h2>Warnungen</h2>${hasPerm("warns_create")?`<button class="btn" onclick="warnModal()">+ Warn hinzufügen</button>`:""}</div>${warns.length?`<div class="table-wrap"><table><thead><tr><th>Creator</th><th>Grund</th><th>Dauer</th><th>Endet</th></tr></thead><tbody>${warns.map(w=>`<tr><td>${esc(creators.find(c=>c.id===w.creator_id)?.name||"—")}</td><td>${esc(w.reason)}</td><td>${w.duration_days} Tage</td><td>${new Date(w.expires_at).toLocaleDateString("de-DE")}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Keine Warnungen vorhanden.</div>`}`;
-}`}
-function eventPage(){return `<div class="section-head"><h2>Termine</h2><button class="btn" onclick="eventModal()">+ Termin</button></div>${events.length?`<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Termin</th><th>Sichtbarkeit</th></tr></thead><tbody>${events.map(e=>`<tr><td>${esc(e.event_date)} ${esc(e.event_time||"")}</td><td>${esc(e.title)}</td><td>${e.visibility==="team"?"Team":"Nur ich"}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Noch keine Termine.</div>`}`}
-function taskPage(){return `<div class="section-head"><h2>Meine Aufgaben</h2><button class="btn" onclick="taskModal()">+ Aufgabe</button></div>${tasks.length?tasks.map(t=>`<div class="card" style="margin-bottom:10px"><b>${esc(t.title)}</b><div class="muted small">${esc(t.priority)} · ${esc(t.due_date||"ohne Termin")}</div></div>`).join(""):`<div class="card empty">Du hast noch keine Aufgaben.</div>`}`}
-function settingsPage(){if(access.role!=="owner")return "";return `<div class="section-head"><h2>Kategorien</h2><button class="btn" onclick="categoryModal()">+ Kategorie</button></div>${categories.map(c=>`<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between"><span>${esc(c.name)}</span><span class="muted">${c.visible?"Sichtbar":"Ausgeblendet"}</span></div>`).join("")}<div class="notice">Der Baukasten wird später zusätzlich um frei definierbare Creator-Felder erweitert.</div>`}
+}
+function eventPage(){
+  if(!hasPerm("events_view")) return permissionDenied();
+  return `<div class="section-head"><h2>Termine</h2>${hasPerm("events_create")?`<button class="btn" onclick="eventModal()">+ Termin</button>`:""}</div>${events.length?`<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Termin</th><th>Sichtbarkeit</th></tr></thead><tbody>${events.map(e=>`<tr><td>${esc(e.event_date)} ${esc(e.event_time||"")}</td><td>${esc(e.title)}</td><td>${e.visibility==="team"?"Team":"Nur ich"}</td></tr>`).join("")}</tbody></table></div>`:`<div class="card empty">Noch keine Termine.</div>`}`;
+}
+function taskPage(){
+  if(!hasPerm("tasks_view")) return permissionDenied();
+  return `<div class="section-head"><h2>Meine Aufgaben</h2>${hasPerm("tasks_create")?`<button class="btn" onclick="taskModal()">+ Aufgabe</button>`:""}</div>${tasks.length?tasks.map(t=>`<div class="card" style="margin-bottom:10px"><b>${esc(t.title)}</b><div class="muted small">${esc(t.priority)} · ${esc(t.due_date||"ohne Termin")}</div></div>`).join(""):`<div class="card empty">Du hast noch keine Aufgaben.</div>`}`;
+}
+function settingsPage(){
+  if(!hasPerm("builder_view")) return permissionDenied();
+  return `<div class="section-head"><h2>Kategorien</h2>${hasPerm("builder_edit")?`<button class="btn" onclick="categoryModal()">+ Kategorie</button>`:""}</div>${categories.map(c=>`<div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between"><span>${esc(c.name)}</span><span class="muted">${c.visible?"Sichtbar":"Ausgeblendet"}</span></div>`).join("")}<div class="notice">Der Baukasten kann über Berechtigungen freigegeben werden.</div>`;
+}
 function accessPage(){
   if(access.role!=="owner") return "";
 
@@ -239,7 +226,7 @@ function accessPage(){
 
               <div style="display:flex;gap:8px;align-items:center">
                 <div class="pill">${roleName}</div>
-                ${a.role!=="owner" ? `<button class="btn secondary" onclick="permissionModal('${esc(a.discord_id)}')">⚙ Berechtigungen</button>` : ""}
+                ${a.role!=="owner"?`<button class="btn secondary" onclick="permissionModal('${a.discord_id}')">⚙ Berechtigungen</button>`:""}
               </div>
             </div>
           </div>
@@ -262,90 +249,56 @@ function accessPage(){
     </div>
   `;
 }
-
-const permissionGroups = [
-  ["Creator",[
-    ["creator_view","Ansehen"],
-    ["creator_create","Anlegen"],
-    ["creator_edit","Bearbeiten"],
-    ["creator_delete","Löschen"]
-  ]],
-  ["Creator Warns",[
-    ["warns_view","Ansehen"],
-    ["warns_create","Warn hinzufügen"],
-    ["warns_delete","Warn löschen"]
-  ]],
-  ["Live",[
-    ["live_view","Ansehen"]
-  ]],
-  ["Termine",[
-    ["events_view","Ansehen"],
-    ["events_create","Anlegen"],
-    ["events_edit","Bearbeiten"],
-    ["events_delete","Löschen"]
-  ]],
-  ["Aufgaben",[
-    ["tasks_view","Ansehen"],
-    ["tasks_create","Anlegen"],
-    ["tasks_edit","Bearbeiten"],
-    ["tasks_delete","Löschen"]
-  ]],
-  ["Baukasten",[
-    ["builder_view","Ansehen"],
-    ["builder_edit","Bearbeiten"]
-  ]]
+const permissionGroups=[
+  ["Creator",[["creator_view","Ansehen"],["creator_create","Anlegen"],["creator_edit","Bearbeiten"],["creator_delete","Löschen"]]],
+  ["Creator Warns",[["warns_view","Ansehen"],["warns_create","Warn hinzufügen"],["warns_delete","Warn löschen"]]],
+  ["Live",[["live_view","Ansehen"]]],
+  ["Termine",[["events_view","Ansehen"],["events_create","Anlegen"],["events_edit","Bearbeiten"],["events_delete","Löschen"]]],
+  ["Aufgaben",[["tasks_view","Ansehen"],["tasks_create","Anlegen"],["tasks_edit","Bearbeiten"],["tasks_delete","Löschen"]]],
+  ["Baukasten",[["builder_view","Ansehen"],["builder_edit","Bearbeiten"]]]
 ];
 
 function permissionModal(discordId){
-  const a = accesses.find(x => String(x.discord_id) === String(discordId));
-  const current = permissions.find(x => String(x.discord_id) === String(discordId)) || {};
+  const a=accesses.find(x=>String(x.discord_id)===String(discordId));
+  const current=permissions.find(x=>String(x.discord_id)===String(discordId))||{};
 
-  const groups = permissionGroups.map(([title,items]) => `
+  const groups=permissionGroups.map(([title,items])=>`
     <div class="card" style="margin-bottom:10px">
       <b>${title}</b>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px">
-        ${items.map(([key,label]) => `
-          <label style="display:flex;gap:9px;align-items:center;cursor:pointer">
-            <input type="checkbox" id="perm_${key}" ${current[key]===true?"checked":""}>
-            <span>${label}</span>
-          </label>
-        `).join("")}
+        ${items.map(([key,label])=>`<label style="display:flex;gap:9px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="perm_${key}" ${current[key]===true?"checked":""}>
+          <span>${label}</span>
+        </label>`).join("")}
       </div>
-    </div>
-  `).join("");
+    </div>`).join("");
 
-  modal(
-    `Berechtigungen – ${esc(a?.display_name || a?.discord_username || discordId)}`,
-    `<div class="notice">Du entscheidest selbst, welche Bereiche dieser Discord-Account sehen oder verändern darf.</div>
+  modal(`Berechtigungen – ${esc(a?.display_name||a?.discord_username||discordId)}`,
+    `<div class="notice">Du entscheidest, welche Bereiche dieser Discord-Account sehen oder verändern darf.</div>
      <div class="actions" style="margin:12px 0">
        <button class="btn secondary" type="button" onclick="setAllPermissions(true)">Alle erlauben</button>
        <button class="btn secondary" type="button" onclick="setAllPermissions(false)">Alle entfernen</button>
-     </div>
-     ${groups}`,
-    `savePermissions('${discordId}')`
-  );
+     </div>${groups}`,
+    `savePermissions('${discordId}')`);
 }
 
 function setAllPermissions(value){
-  permissionGroups.flatMap(x=>x[1]).forEach(([key])=>{
-    const el = $("#perm_"+key);
-    if(el) el.checked = value;
+  permissionGroups.flatMap(g=>g[1]).forEach(([key])=>{
+    const el=$("#perm_"+key);
+    if(el) el.checked=value;
   });
 }
 
 async function savePermissions(discordId){
-  const row = {discord_id: String(discordId), updated_at: new Date().toISOString()};
-  permissionGroups.flatMap(x=>x[1]).forEach(([key])=>{
-    row[key] = !!$("#perm_"+key)?.checked;
-  });
+  const row={discord_id:String(discordId),updated_at:new Date().toISOString()};
+  permissionGroups.flatMap(g=>g[1]).forEach(([key])=>row[key]=!!$("#perm_"+key)?.checked);
 
-  const {error} = await sb.from("cv_permissions").upsert(row,{onConflict:"discord_id"});
+  const {error}=await sb.from("cv_permissions").upsert(row,{onConflict:"discord_id"});
   if(error){
     console.error(error);
-    alert("Berechtigungen konnten nicht gespeichert werden: " + error.message);
+    alert("Berechtigungen konnten nicht gespeichert werden: "+error.message);
     return;
   }
-
   closeModal();
   await reload();
   render("access");
@@ -390,7 +343,7 @@ function creatorModal(){if(!hasPerm("creator_create"))return alert("Keine Berech
 }
 
 function editCreator(id){
-  if(!hasPerm("creator_edit")){ alert("Keine Berechtigung."); return; }
+  if(!hasPerm("creator_edit")){alert("Keine Berechtigung.");return;}
   const c = creators.find(x => x.id === id);
   if(!c){ alert("Creator wurde nicht gefunden."); return; }
 
@@ -450,7 +403,7 @@ async function updateCreator(id){
 }
 
 function warnModal(){
-  if(!hasPerm("warns_create")){ alert("Keine Berechtigung."); return; }
+  if(!hasPerm("warns_create")){alert("Keine Berechtigung.");return;}
   if(!creators.length){
     alert("Bitte zuerst einen Creator anlegen.");
     return;
@@ -505,11 +458,11 @@ async function saveWarn(){
   await reload();
   render("warns");
 }
-function eventModal(){modal("Termin anlegen",`<div class="form-grid">${f("etitle","Titel")}${f("edate","Datum","date")}${f("etime","Uhrzeit","time")}${sel("evis","Sichtbarkeit",["personal","team"])}<div class="field full"><label>Beschreibung</label><textarea id="edesc"></textarea></div></div>`,"saveEvent()")}
+function eventModal(){if(!hasPerm("events_create"))return alert("Keine Berechtigung.");modal("Termin anlegen",`<div class="form-grid">${f("etitle","Titel")}${f("edate","Datum","date")}${f("etime","Uhrzeit","time")}${sel("evis","Sichtbarkeit",["personal","team"])}<div class="field full"><label>Beschreibung</label><textarea id="edesc"></textarea></div></div>`,"saveEvent()")}
 async function saveEvent(){await sb.from("cv_events").insert({owner_id:me.id,title:$("#etitle").value,event_date:$("#edate").value,event_time:$("#etime").value||null,description:$("#edesc").value||null,visibility:$("#evis").value});closeModal();await reload();render("calendar")}
-function taskModal(){modal("Aufgabe anlegen",`<div class="form-grid">${f("ttitle","Aufgabe")}${f("tdue","Fällig am","date")}${sel("tprio","Priorität",["Niedrig","Normal","Hoch"])}<div class="field full"><label>Notiz</label><textarea id="tnote"></textarea></div></div>`,"saveTask()")}
+function taskModal(){if(!hasPerm("tasks_create"))return alert("Keine Berechtigung.");modal("Aufgabe anlegen",`<div class="form-grid">${f("ttitle","Aufgabe")}${f("tdue","Fällig am","date")}${sel("tprio","Priorität",["Niedrig","Normal","Hoch"])}<div class="field full"><label>Notiz</label><textarea id="tnote"></textarea></div></div>`,"saveTask()")}
 async function saveTask(){await sb.from("cv_tasks").insert({owner_id:me.id,title:$("#ttitle").value,due_date:$("#tdue").value||null,priority:$("#tprio").value,note:$("#tnote").value||null});closeModal();await reload();render("tasks")}
-function categoryModal(){modal("Kategorie hinzufügen",`<div class="form-grid">${f("catname","Name")}${f("catslug","Kurzname / Slug")}${f("catpos","Position","number")}</div>`,"saveCategory()")}
+function categoryModal(){if(!hasPerm("builder_edit"))return alert("Keine Berechtigung.");modal("Kategorie hinzufügen",`<div class="form-grid">${f("catname","Name")}${f("catslug","Kurzname / Slug")}${f("catpos","Position","number")}</div>`,"saveCategory()")}
 async function saveCategory(){await sb.from("cv_categories").insert({name:$("#catname").value,slug:$("#catslug").value.toLowerCase().replace(/[^a-z0-9-]/g,"-"),position:Number($("#catpos").value||100)});closeModal();await reload();render("settings")}
 function accessModal(){modal("Discord-Account freigeben",`<div class="form-grid">${f("adid","Discord-ID")}${f("adname","Anzeigename")}${sel("adrole","Rolle",["member","admin"])}</div>`,"saveAccess()")}
 async function saveAccess(){
