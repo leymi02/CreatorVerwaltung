@@ -170,7 +170,40 @@ function accessPage(){
 function modal(title,body,save){$("#modalRoot").innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><b>${title}</b><button class="btn secondary" onclick="closeModal()">✕</button></div>${body}<div class="actions" style="margin-top:18px"><button class="btn" onclick="${save}">Speichern</button><button class="btn secondary" onclick="closeModal()">Abbrechen</button></div></div></div>`}
 function closeModal(){$("#modalRoot").innerHTML=""}
 function creatorModal(){modal("Creator anlegen",`<div class="form-grid">${f("cname","Name")}${sel("crank","Rang",["Probe Streamer","Streamer","Creator"])}${f("cdiscord","Discord-ID")}${f("ctwitch","Twitch-Link")}${f("ctiktok","TikTok-Link")}${f("cjoined","Dabei seit","date")}<div class="field full"><label>Interne Info</label><textarea id="csummary"></textarea></div></div>`,"saveCreator()")}
-async function saveCreator(){const row={name:$("#cname").value.trim(),rank:$("#crank").value,discord_id:$("#cdiscord").value.trim()||null,twitch_url:$("#ctwitch").value.trim()||null,tiktok_url:$("#ctiktok").value.trim()||null,joined_at:$("#cjoined").value||null,summary:$("#csummary").value.trim()||null};if(!row.name)return;await sb.from("cv_creators").insert(row);closeModal();await reload();render("creators")}
+ async function saveCreator(){
+  const name = $("#cname").value.trim();
+  const rank = $("#crank").value;
+  const discordId = $("#cdiscord").value.trim();
+  const twitchUrl = $("#ctwitch").value.trim();
+  const tiktokUrl = $("#ctiktok").value.trim();
+  const joinedAt = $("#cjoined").value || null;
+  const summary = $("#csummary").value.trim();
+
+  if(!name){
+    alert("Bitte einen Namen eintragen.");
+    return;
+  }
+
+  const {error} = await sb.rpc("cv_add_creator", {
+    p_name: name,
+    p_rank: rank,
+    p_discord_id: discordId,
+    p_twitch_url: twitchUrl,
+    p_tiktok_url: tiktokUrl,
+    p_joined_at: joinedAt,
+    p_summary: summary
+  });
+
+  if(error){
+    console.error(error);
+    alert("Creator konnte nicht gespeichert werden: " + error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("creators");
+}
 function warnModal(){modal("Creator Warn",`<div class="form-grid">${selObj("wcreator","Creator",creators)}${f("wreason","Grund")} ${f("wdays","Dauer in Tagen","number")}</div>`,"saveWarn()")}
 async function saveWarn(){let d=Math.max(1,Number($("#wdays").value||1)),start=new Date(),end=new Date(start.getTime()+d*86400000);await sb.from("cv_warns").insert({creator_id:$("#wcreator").value,reason:$("#wreason").value,duration_days:d,starts_at:start.toISOString(),expires_at:end.toISOString(),created_by:me.id});closeModal();await reload();render("warns")}
 function eventModal(){modal("Termin anlegen",`<div class="form-grid">${f("etitle","Titel")}${f("edate","Datum","date")}${f("etime","Uhrzeit","time")}${sel("evis","Sichtbarkeit",["personal","team"])}<div class="field full"><label>Beschreibung</label><textarea id="edesc"></textarea></div></div>`,"saveEvent()")}
