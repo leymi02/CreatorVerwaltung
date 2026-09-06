@@ -37,7 +37,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
 const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], liveStreams=[], liveLoading=false, liveError="";
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], liveStreams=[], liveLoading=false, liveError="", twitchStats30d=[];
 
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
@@ -93,7 +93,7 @@ async function boot(){
 }
 function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
 async function reload(){
-  const [c,w,e,t,cat,a,p,h] = await Promise.all([
+  const [c,w,e,t,cat,a,p,h,ts] = await Promise.all([
     sb.from("cv_creators").select("*").order("name"),
     sb.from("cv_warns").select("*").order("created_at",{ascending:false}),
     sb.from("cv_events").select("*").order("event_date"),
@@ -101,7 +101,8 @@ async function reload(){
     sb.from("cv_categories").select("*").order("position"),
     sb.from("cv_access").select("*").order("created_at"),
     sb.from("cv_permissions").select("*"),
-    sb.from("cv_creator_history").select("*").order("created_at",{ascending:false})
+    sb.from("cv_creator_history").select("*").order("created_at",{ascending:false}),
+    sb.rpc("cv_get_twitch_stats_30d")
   ]);
 
   creators = c.data || [];
@@ -112,6 +113,7 @@ async function reload(){
   accesses = a.data || [];
   permissions = p.data || [];
   creatorHistory = h.data || [];
+  twitchStats30d = ts.data || [];
   applyPermissionUI();
 }
 function myPermissions(){
@@ -151,6 +153,15 @@ function permissionDenied(){
   return `<div class="card empty">Für diesen Bereich hast du keine Berechtigung.</div>`;
 }
 
+
+function twitchStatsForCreator(id){
+  const row=twitchStats30d.find(s=>String(s.creator_id)===String(id));
+  return {
+    days:Number(row?.stream_days||0),
+    avg:Number(row?.average_viewers||0),
+    peak:Number(row?.peak_viewers||0)
+  };
+}
 
 function twitchNameFromUrl(url){
   if(!url) return "";
@@ -272,9 +283,11 @@ function creatorTable(arr){
       <td><b>${esc(c.name)}</b></td>
       <td>${esc(c.rank)}</td>
       <td>${c.twitch_url?`<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>`:"–"}</td>
-      <td>${c.twitch_days_30d ?? 0}</td>
-      <td>${c.twitch_avg_viewers_30d ?? 0}</td>
-      <td>${c.twitch_peak_viewers_30d ?? 0}</td>
+      <td>${esc(c.created_by_name||"–")}</td>
+      <td>${c.created_at?new Date(c.created_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–"}</td>
+      <td>${twitchStatsForCreator(c.id).days}</td>
+      <td>${twitchStatsForCreator(c.id).avg}</td>
+      <td>${twitchStatsForCreator(c.id).peak}</td>
       ${(hasPerm("creator_edit")||hasPerm("creator_delete"))?`<td><div class="actions">
         ${hasPerm("creator_edit")?`<button class="btn secondary" onclick="editCreator('${c.id}')">✎ Bearbeiten</button>`:""}
         ${hasPerm("creator_delete")?`<button class="btn danger" onclick="deleteCreator('${c.id}')">✕ Löschen</button>`:""}
@@ -292,7 +305,7 @@ function livePage(){
   setTimeout(()=>refreshLiveStreams(true),0);
   return `<div class="grid">
     ${metric("Gerade live",liveStreams.length)}
-    ${metric("Höchster 30T-Peak",Math.max(0,...activeCreators.map(c=>c.twitch_peak_viewers_30d||0)))}
+    ${metric("Höchster 30T-Peak",Math.max(0,...activeCreators.map(c=>twitchStatsForCreator(c.id).peak)))}
     ${metric("Erfasste Creator",activeCreators.filter(c=>c.twitch_url).length)}
     ${metric("Plattform","Twitch")}
   </div>
