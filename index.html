@@ -163,6 +163,38 @@ function twitchStatsForCreator(id){
   };
 }
 
+async function syncDiscordCreatorRole(discordId, rank){
+  const id=String(discordId||"").trim();
+  if(!id) return {success:true, skipped:true};
+
+  const {data,error}=await sb.functions.invoke("cv-discord-roles",{
+    body:{
+      discord_id:id,
+      rank:rank===undefined ? null : rank
+    }
+  });
+
+  if(error){
+    console.error("cv-discord-roles:",error);
+    return {success:false,error:error.message||"Discord-Rollensync fehlgeschlagen."};
+  }
+
+  if(!data?.success){
+    console.error("cv-discord-roles:",data);
+    return {success:false,error:data?.error||"Discord-Rollensync fehlgeschlagen."};
+  }
+
+  return {success:true,data};
+}
+
+function showDiscordSyncWarning(result){
+  if(result?.success) return;
+  alert(
+    "Der Eintrag wurde gespeichert, aber die Discord-Rolle konnte nicht synchronisiert werden.\n\n" +
+    (result?.error||"Unbekannter Fehler")
+  );
+}
+
 function twitchNameFromUrl(url){
   if(!url) return "";
   try{
@@ -433,7 +465,25 @@ function archiveSection(title,rows,heads){
 
 async function restoreEvent(id){return archiveRpc("cv_restore_event",id,"Termin","wiederhergestellt")}
 async function permanentlyDeleteEvent(id){return archivePermanent("cv_permanently_delete_event",id,"Termin")}
-async function restoreCreator(id){return archiveRpc("cv_restore_creator",id,"Creator","wiederhergestellt")}
+async function restoreCreator(id){
+  if(access?.role!=="owner") return alert("Keine Berechtigung.");
+  const c=creators.find(x=>x.id===id);
+  if(!c) return alert("Creator wurde nicht gefunden.");
+  if(!confirm(`Creator "${c.name}" wirklich wiederherstellen?`)) return;
+
+  const {error}=await sb.rpc("cv_restore_creator",{p_id:id});
+  if(error){
+    console.error(error);
+    alert("Creator konnte nicht wiederhergestellt werden: "+error.message);
+    return;
+  }
+
+  const syncResult=await syncDiscordCreatorRole(c.discord_id,c.rank);
+  showDiscordSyncWarning(syncResult);
+
+  await reload();
+  render("archive");
+}
 async function permanentlyDeleteCreator(id){return archivePermanent("cv_permanently_delete_creator",id,"Creator")}
 async function restoreWarn(id){return archiveRpc("cv_restore_warn",id,"Warn","wiederhergestellt")}
 async function permanentlyDeleteWarn(id){return archivePermanent("cv_permanently_delete_warn",id,"Warn")}
@@ -632,6 +682,9 @@ function creatorModal(){if(!hasPerm("creator_create"))return alert("Keine Berech
     return;
   }
 
+  const syncResult=await syncDiscordCreatorRole(discordId,rank);
+  showDiscordSyncWarning(syncResult);
+
   closeModal();
   await reload();
   render("creators");
@@ -695,6 +748,9 @@ function editCreator(id){
 }
 
 async function updateCreator(id){
+  const existingCreator=creators.find(x=>x.id===id);
+  const oldDiscordId=String(existingCreator?.discord_id||"").trim();
+
   const name = $("#ename").value.trim();
   const rank = $("#erank").value;
   const discordId = $("#ediscord").value.trim();
@@ -725,6 +781,14 @@ async function updateCreator(id){
     return;
   }
 
+  if(oldDiscordId && oldDiscordId!==discordId){
+    const oldSync=await syncDiscordCreatorRole(oldDiscordId,null);
+    showDiscordSyncWarning(oldSync);
+  }
+
+  const syncResult=await syncDiscordCreatorRole(discordId,rank);
+  showDiscordSyncWarning(syncResult);
+
   closeModal();
   await reload();
   render("creators");
@@ -750,6 +814,9 @@ async function deleteCreator(id){
     alert("Creator konnte nicht gelöscht werden: "+error.message);
     return;
   }
+
+  const syncResult=await syncDiscordCreatorRole(c.discord_id,null);
+  showDiscordSyncWarning(syncResult);
 
   await reload();
   render("creators");
