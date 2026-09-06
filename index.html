@@ -37,7 +37,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
 const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[];
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], liveStreams=[], liveLoading=false, liveError="";
 
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
@@ -151,6 +151,101 @@ function permissionDenied(){
   return `<div class="card empty">Für diesen Bereich hast du keine Berechtigung.</div>`;
 }
 
+
+function twitchNameFromUrl(url){
+  if(!url) return "";
+  try{
+    const u=new URL(url.startsWith("http")?url:`https://${url}`);
+    if(!/^(www\.)?twitch\.tv$/i.test(u.hostname)) return "";
+    return (u.pathname.split("/").filter(Boolean)[0]||"").toLowerCase();
+  }catch{
+    return String(url).replace(/^https?:\/\/(www\.)?twitch\.tv\//i,"").split(/[/?#]/)[0].trim().toLowerCase();
+  }
+}
+
+async function refreshLiveStreams(showLoading=true){
+  const activeCreators=creators.filter(c=>!c.archived && c.twitch_url);
+  const usernames=[...new Set(activeCreators.map(c=>twitchNameFromUrl(c.twitch_url)).filter(Boolean))];
+
+  if(!usernames.length){
+    liveStreams=[];
+    liveError="";
+    liveLoading=false;
+    if(document.querySelector("#liveStatusArea")) renderLiveStatusArea();
+    return;
+  }
+
+  if(showLoading){
+    liveLoading=true;
+    liveError="";
+    if(document.querySelector("#liveStatusArea")) renderLiveStatusArea();
+  }
+
+  const {data,error}=await sb.functions.invoke("cv-twitch",{
+    body:{usernames}
+  });
+
+  liveLoading=false;
+
+  if(error){
+    console.error("cv-twitch:",error);
+    liveError=error.message||"Twitch-Abfrage fehlgeschlagen.";
+    liveStreams=[];
+  }else if(!data?.success){
+    liveError=data?.error||"Twitch-Abfrage fehlgeschlagen.";
+    liveStreams=[];
+  }else{
+    liveError="";
+    liveStreams=Array.isArray(data.streams)?data.streams:[];
+  }
+
+  if(document.querySelector("#liveStatusArea")) renderLiveStatusArea();
+}
+
+function renderLiveStatusArea(){
+  const box=document.querySelector("#liveStatusArea");
+  if(!box) return;
+
+  const activeCreators=creators.filter(c=>!c.archived);
+  const creatorByTwitch=new Map(
+    activeCreators
+      .map(c=>[twitchNameFromUrl(c.twitch_url),c])
+      .filter(([name])=>name)
+  );
+
+  if(liveLoading){
+    box.innerHTML=`<div class="card empty">Twitch wird gerade abgefragt …</div>`;
+    return;
+  }
+
+  if(liveError){
+    box.innerHTML=`<div class="notice">Twitch-Abfrage fehlgeschlagen: ${esc(liveError)}</div>`;
+    return;
+  }
+
+  if(!liveStreams.length){
+    box.innerHTML=`<div class="card empty">Aktuell ist keiner der eingetragenen Creator live.</div>`;
+    return;
+  }
+
+  box.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>Creator</th><th>Titel</th><th>Kategorie</th><th>Zuschauer</th><th>Seit</th><th>Twitch</th></tr></thead>
+    <tbody>${liveStreams.map(s=>{
+      const creator=creatorByTwitch.get(String(s.user_login||"").toLowerCase());
+      const started=s.started_at?new Date(s.started_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–";
+      const url=creator?.twitch_url||`https://www.twitch.tv/${encodeURIComponent(s.user_login||"")}`;
+      return `<tr>
+        <td><span class="live-dot"></span><b>${esc(creator?.name||s.user_name||s.user_login||"Twitch")}</b></td>
+        <td>${esc(s.title||"–")}</td>
+        <td>${esc(s.game_name||"–")}</td>
+        <td>${Number(s.viewer_count||0).toLocaleString("de-DE")}</td>
+        <td>${esc(started)}</td>
+        <td><a href="${esc(url)}" target="_blank">Stream öffnen</a></td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table></div>`;
+}
+
 function setPageTitle(p){const m={dashboard:["Dashboard","Deine Creator-Verwaltung auf einen Blick."],creators:["Creator","Profile, Links, Statistiken und interne Informationen."],live:["Live jetzt","Aktuelle Streams und gespeicherte Peak-Zuschauer."],warns:["Creator Warns","Warnungen und Laufzeiten übersichtlich verwalten."],calendar:["Termine","Persönliche und gemeinsame Termine."],tasks:["Meine Aufgaben","Deine privaten To-dos."],settings:["Baukasten","Kategorien der Verwaltung selbst organisieren."],archive:["Archiv","Gelöschte Einträge 30 Tage lang nachvollziehen und wiederherstellen."],access:["Zugriffsverwaltung","Du entscheidest, welche Discord-Accounts Zugriff haben."]};$("#pageTitle").textContent=m[p][0];$("#subtitle").textContent=m[p][1]}
 function render(p){
   const perms={creators:"creator_view",live:"live_view",warns:"warns_view",calendar:"events_view",tasks:"tasks_view",settings:"builder_view"};
@@ -161,9 +256,9 @@ function render(p){
   const fn={dashboard:dash,creators:creatorPage,live:livePage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,archive:archivePage,access:accessPage}[p];
   $("#content").innerHTML=fn();
 }
-function dash(){let live=creators.filter(c=>c.is_live).length;return `<div class="grid">
-${metric("Probe Streamer",creators.filter(c=>c.rank==="Probe Streamer").length)}${metric("Streamer",creators.filter(c=>c.rank==="Streamer").length)}${metric("Creator",creators.filter(c=>c.rank==="Creator").length)}${metric("Aktive Warns",warns.filter(w=>new Date(w.expires_at)>new Date()).length)}
-</div><div class="section"><div class="section-head"><h2>30-Tage-Aktivität</h2><span class="pill">${live} live</span></div>${creatorTable(creators.slice(0,8))}</div>`}
+function dash(){const activeCreators=creators.filter(c=>!c.archived);let live=liveStreams.length;return `<div class="grid">
+${metric("Probe Streamer",activeCreators.filter(c=>c.rank==="Probe Streamer").length)}${metric("Streamer",activeCreators.filter(c=>c.rank==="Streamer").length)}${metric("Creator",activeCreators.filter(c=>c.rank==="Creator").length)}${metric("Aktive Warns",warns.filter(w=>new Date(w.expires_at)>new Date()).length)}
+</div><div class="section"><div class="section-head"><h2>30-Tage-Aktivität</h2><span class="pill">${live} live</span></div>${creatorTable(activeCreators.slice(0,8))}</div>`}
 function metric(a,b){return `<div class="card metric"><span class="muted">${a}</span><b>${b}</b></div>`}
 function creatorTable(arr){
   if(!arr.length) return `<div class="card empty">Noch keine Creator angelegt.</div>`;
@@ -192,7 +287,20 @@ function creatorPage(){
   const activeCreators=creators.filter(c=>!c.archived);
   return `<div class="section-head"><h2>Alle Creator</h2>${hasPerm("creator_create")?`<button class="btn" onclick="creatorModal()">+ Creator anlegen</button>`:""}</div>${creatorTable(activeCreators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden.</div>`;
 }
-function livePage(){return `<div class="grid">${metric("Gerade live",0)}${metric("Höchster 30T-Peak",Math.max(0,...creators.map(c=>c.twitch_peak_viewers_30d||0)))}${metric("Erfasste Creator",creators.length)}${metric("Plattform","Twitch")}</div><div class="section card empty">Die Live-Abfrage wird im nächsten Integrationsschritt mit der Twitch API verbunden. Die Datenbank für Live-Sessions und Peaks ist bereits vorbereitet.</div>`}
+function livePage(){
+  const activeCreators=creators.filter(c=>!c.archived);
+  setTimeout(()=>refreshLiveStreams(true),0);
+  return `<div class="grid">
+    ${metric("Gerade live",liveStreams.length)}
+    ${metric("Höchster 30T-Peak",Math.max(0,...activeCreators.map(c=>c.twitch_peak_viewers_30d||0)))}
+    ${metric("Erfasste Creator",activeCreators.filter(c=>c.twitch_url).length)}
+    ${metric("Plattform","Twitch")}
+  </div>
+  <div class="section">
+    <div class="section-head"><h2>Live Streams</h2><button class="btn secondary" onclick="refreshLiveStreams(true)">↻ Aktualisieren</button></div>
+    <div id="liveStatusArea"><div class="card empty">Twitch wird gerade abgefragt …</div></div>
+  </div>`;
+}
 function warnPage(){
   if(!hasPerm("warns_view")) return permissionDenied();
 
