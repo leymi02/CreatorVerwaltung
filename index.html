@@ -324,9 +324,28 @@ async function archiveRpc(fn,id,label){
   if(error){console.error(error);alert(`${label} konnte nicht wiederhergestellt werden: `+error.message);return;}
   await reload();render("archive");
 }
+function customConfirm(title,message,confirmText="Endgültig löschen"){
+  return new Promise(resolve=>{
+    modal(
+      title,
+      `<div class="notice" style="margin-bottom:18px">${esc(message)}</div>
+       <div class="actions" style="justify-content:flex-end">
+         <button class="btn secondary" id="customCancel">Abbrechen</button>
+         <button class="btn danger" id="customConfirm">${esc(confirmText)}</button>
+       </div>`
+    );
+    document.getElementById("customCancel").onclick=()=>{closeModal();resolve(false);}
+    document.getElementById("customConfirm").onclick=()=>{closeModal();resolve(true);}
+  });
+}
+
 async function archivePermanent(fn,id,label){
   if(access?.role!=="owner") return alert("Keine Berechtigung.");
-  if(!confirm(`${label} wirklich ENDGÜLTIG löschen?\n\nDanach kann der Eintrag nicht wiederhergestellt werden.`)) return;
+  const ok=await customConfirm(
+    `${label} endgültig löschen?`,
+    "Danach kann der Eintrag nicht wiederhergestellt werden."
+  );
+  if(!ok) return;
   const {error}=await sb.rpc(fn,{p_id:id});
   if(error){console.error(error);alert(`${label} konnte nicht endgültig gelöscht werden: `+error.message);return;}
   await reload();render("archive");
