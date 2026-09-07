@@ -37,7 +37,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
 const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], liveStreams=[], liveLoading=false, liveError="", twitchStats30d=[];
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], liveStreams=[], liveLoading=false, liveError="", twitchStats30d=[], taskFilter="open";
 
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
@@ -418,7 +418,63 @@ function eventPage(){
 }
 function taskPage(){
   if(!hasPerm("tasks_view")) return permissionDenied();
-  return `<div class="section-head"><h2>Meine Aufgaben</h2>${hasPerm("tasks_create")?`<button class="btn" onclick="taskModal()">+ Aufgabe</button>`:""}</div>${tasks.length?tasks.map(t=>`<div class="card" style="margin-bottom:10px"><b>${esc(t.title)}</b><div class="muted small">${esc(t.priority)} · ${esc(t.due_date||"ohne Termin")}</div></div>`).join(""):`<div class="card empty">Du hast noch keine Aufgaben.</div>`}`;
+
+  const today=new Date();
+  today.setHours(0,0,0,0);
+
+  let rows=[...tasks];
+  if(taskFilter==="open") rows=rows.filter(t=>!t.done);
+  if(taskFilter==="done") rows=rows.filter(t=>!!t.done);
+
+  rows.sort((a,b)=>{
+    if(!!a.done!==!!b.done) return a.done?1:-1;
+    const ad=a.due_date?new Date(a.due_date+"T00:00:00").getTime():Infinity;
+    const bd=b.due_date?new Date(b.due_date+"T00:00:00").getTime():Infinity;
+    return ad-bd;
+  });
+
+  const cards=rows.length ? rows.map(t=>{
+    const due=t.due_date?new Date(t.due_date+"T00:00:00"):null;
+    const overdue=due && !t.done && due<today;
+    const dueText=t.due_date ? new Date(t.due_date+"T00:00:00").toLocaleDateString("de-DE") : "ohne Termin";
+    const canEdit=hasPerm("tasks_edit");
+    const canDelete=hasPerm("tasks_delete");
+
+    return `<div class="card" style="margin-bottom:10px;${overdue?"border-color:#ff9cab;":""}">
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start">
+        <div style="min-width:0">
+          <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+            <b style="${t.done?"text-decoration:line-through;opacity:.65;":""}">${esc(t.title)}</b>
+            ${t.done?`<span class="pill">Erledigt</span>`:""}
+            ${overdue?`<span class="pill" style="color:#ffdce2;border-color:#6c3540">Überfällig</span>`:""}
+          </div>
+          <div class="muted small" style="margin-top:6px">${esc(t.priority||"Normal")} · ${esc(dueText)}</div>
+          ${t.note?`<div class="small" style="margin-top:8px;white-space:pre-wrap">${esc(t.note)}</div>`:""}
+        </div>
+        ${(canEdit||canDelete)?`<div class="actions" style="justify-content:flex-end">
+          ${canEdit?`<button class="btn secondary" onclick="toggleTask('${t.id}',${t.done?"false":"true"})">${t.done?"↩ Wieder öffnen":"✓ Erledigt"}</button>`:""}
+          ${canEdit?`<button class="btn secondary" onclick="editTask('${t.id}')">✎ Bearbeiten</button>`:""}
+          ${canDelete?`<button class="btn danger" onclick="deleteTask('${t.id}')">✕ Löschen</button>`:""}
+        </div>`:""}
+      </div>
+    </div>`;
+  }).join("") : `<div class="card empty">${taskFilter==="open"?"Keine offenen Aufgaben.":taskFilter==="done"?"Keine erledigten Aufgaben.":"Du hast noch keine Aufgaben."}</div>`;
+
+  return `<div class="section-head">
+    <h2>Meine Aufgaben</h2>
+    ${hasPerm("tasks_create")?`<button class="btn" onclick="taskModal()">+ Aufgabe</button>`:""}
+  </div>
+  <div class="actions" style="margin-bottom:14px">
+    <button class="btn ${taskFilter==="all"?"":"secondary"}" onclick="setTaskFilter('all')">Alle</button>
+    <button class="btn ${taskFilter==="open"?"":"secondary"}" onclick="setTaskFilter('open')">Offen</button>
+    <button class="btn ${taskFilter==="done"?"":"secondary"}" onclick="setTaskFilter('done')">Erledigt</button>
+  </div>
+  ${cards}`;
+}
+
+function setTaskFilter(value){
+  taskFilter=value;
+  render("tasks");
 }
 function settingsPage(){
   if(!hasPerm("builder_view")) return permissionDenied();
@@ -1069,8 +1125,142 @@ async function deleteEvent(id){
   await reload();
   render("calendar");
 }
-function taskModal(){if(!hasPerm("tasks_create"))return alert("Keine Berechtigung.");modal("Aufgabe anlegen",`<div class="form-grid">${f("ttitle","Aufgabe")}${f("tdue","Fällig am","date")}${sel("tprio","Priorität",["Niedrig","Normal","Hoch"])}<div class="field full"><label>Notiz</label><textarea id="tnote"></textarea></div></div>`,"saveTask()")}
-async function saveTask(){await sb.from("cv_tasks").insert({owner_id:me.id,title:$("#ttitle").value,due_date:$("#tdue").value||null,priority:$("#tprio").value,note:$("#tnote").value||null});closeModal();await reload();render("tasks")}
+function taskModal(){
+  if(!hasPerm("tasks_create")) return alert("Keine Berechtigung.");
+  modal("Aufgabe anlegen",
+    `<div class="form-grid">
+      ${f("ttitle","Aufgabe")}
+      ${f("tdue","Fällig am","date")}
+      ${sel("tprio","Priorität",["Niedrig","Normal","Hoch"])}
+      <div class="field full"><label>Notiz</label><textarea id="tnote"></textarea></div>
+    </div>`,
+    "saveTask()"
+  );
+  $("#tprio").value="Normal";
+}
+
+async function saveTask(){
+  if(!hasPerm("tasks_create")) return alert("Keine Berechtigung.");
+
+  const title=$("#ttitle").value.trim();
+  const dueDate=$("#tdue").value||null;
+  const priority=$("#tprio").value;
+  const note=$("#tnote").value.trim();
+
+  if(!title) return alert("Bitte eine Aufgabe eintragen.");
+
+  const {error}=await sb.rpc("cv_add_task",{
+    p_title:title,
+    p_due_date:dueDate,
+    p_priority:priority,
+    p_note:note
+  });
+
+  if(error){
+    console.error(error);
+    alert("Aufgabe konnte nicht gespeichert werden: "+error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  taskFilter="open";
+  render("tasks");
+}
+
+function editTask(id){
+  if(!hasPerm("tasks_edit")) return alert("Keine Berechtigung.");
+
+  const t=tasks.find(x=>x.id===id);
+  if(!t) return alert("Aufgabe wurde nicht gefunden.");
+
+  modal("Aufgabe bearbeiten",
+    `<div class="form-grid">
+      ${f("uttitle","Aufgabe")}
+      ${f("utdue","Fällig am","date")}
+      ${sel("utprio","Priorität",["Niedrig","Normal","Hoch"])}
+      <div class="field full"><label>Notiz</label><textarea id="utnote"></textarea></div>
+    </div>`,
+    `updateTask('${id}')`
+  );
+
+  $("#uttitle").value=t.title||"";
+  $("#utdue").value=t.due_date?String(t.due_date).slice(0,10):"";
+  $("#utprio").value=t.priority||"Normal";
+  $("#utnote").value=t.note||"";
+}
+
+async function updateTask(id){
+  if(!hasPerm("tasks_edit")) return alert("Keine Berechtigung.");
+
+  const title=$("#uttitle").value.trim();
+  const dueDate=$("#utdue").value||null;
+  const priority=$("#utprio").value;
+  const note=$("#utnote").value.trim();
+
+  if(!title) return alert("Bitte eine Aufgabe eintragen.");
+
+  const {error}=await sb.rpc("cv_update_task",{
+    p_id:id,
+    p_title:title,
+    p_due_date:dueDate,
+    p_priority:priority,
+    p_note:note
+  });
+
+  if(error){
+    console.error(error);
+    alert("Aufgabe konnte nicht geändert werden: "+error.message);
+    return;
+  }
+
+  closeModal();
+  await reload();
+  render("tasks");
+}
+
+async function toggleTask(id,done){
+  if(!hasPerm("tasks_edit")) return alert("Keine Berechtigung.");
+
+  const {error}=await sb.rpc("cv_toggle_task",{
+    p_id:id,
+    p_done:!!done
+  });
+
+  if(error){
+    console.error(error);
+    alert("Aufgabenstatus konnte nicht geändert werden: "+error.message);
+    return;
+  }
+
+  await reload();
+  render("tasks");
+}
+
+async function deleteTask(id){
+  if(!hasPerm("tasks_delete")) return alert("Keine Berechtigung.");
+
+  const t=tasks.find(x=>x.id===id);
+  if(!t) return alert("Aufgabe wurde nicht gefunden.");
+
+  const ok=await customConfirm(
+    "Aufgabe löschen?",
+    `Die Aufgabe "${t.title}" wird endgültig gelöscht.`,
+    "Löschen"
+  );
+  if(!ok) return;
+
+  const {error}=await sb.rpc("cv_delete_task",{p_id:id});
+
+  if(error){
+    console.error(error);
+    alert("Aufgabe konnte nicht gelöscht werden: "+error.message);
+    return;
+  }
+
+  await reload();
+  render("tasks");
+}
 function categoryModal(){if(!hasPerm("builder_edit"))return alert("Keine Berechtigung.");modal("Kategorie hinzufügen",`<div class="form-grid">${f("catname","Name")}${f("catslug","Kurzname / Slug")}${f("catpos","Position","number")}</div>`,"saveCategory()")}
 async function saveCategory(){await sb.from("cv_categories").insert({name:$("#catname").value,slug:$("#catslug").value.toLowerCase().replace(/[^a-z0-9-]/g,"-"),position:Number($("#catpos").value||100)});closeModal();await reload();render("settings")}
 function accessModal(){modal("Discord-Account freigeben",`<div class="form-grid">${f("adid","Discord-ID")}${f("adname","Anzeigename")}${sel("adrole","Rolle",["member","admin"])}</div>`,"saveAccess()")}
