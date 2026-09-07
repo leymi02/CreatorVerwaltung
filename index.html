@@ -1204,7 +1204,16 @@ async function updateCreator(id){
   if(modalRoot) modalRoot.innerHTML="";
 
   const oldRank=existingCreator?.rank||null;
-  const isRankChange=!!oldRank && oldRank!==rank;
+
+  // Discord-Verkündung nur bei einem echten Uprank.
+  // Downranks und gleichbleibende Ränge lösen keine Nachricht aus.
+  const rankOrder=["Probe Streamer","Streamer","Creator","Creator+"];
+  const oldRankIndex=rankOrder.indexOf(oldRank);
+  const newRankIndex=rankOrder.indexOf(rank);
+  const isUprank=
+    oldRankIndex !== -1 &&
+    newRankIndex !== -1 &&
+    newRankIndex > oldRankIndex;
 
   // Oberfläche neu laden, aber Discord darf die UI nicht blockieren.
   reload()
@@ -1229,7 +1238,7 @@ async function updateCreator(id){
         syncDiscordCreatorRole(
           discordId,
           rank,
-          {announce:(isRankChange ? "uprank" : null),oldRank:oldRank}
+          {announce:(isUprank ? "uprank" : null),oldRank:oldRank}
         ),
         new Promise(resolve=>setTimeout(
           ()=>resolve({success:false,error:"Discord-Rollensync Zeitüberschreitung."}),
