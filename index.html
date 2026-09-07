@@ -130,9 +130,7 @@ async function boot(){
 function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
 
 function showWelcome(){
-  if(sessionStorage.getItem("cv_welcome_shown")==="1") return;
-
-  sessionStorage.setItem("cv_welcome_shown","1");
+  if(document.getElementById("cvWelcome")) return;
 
   const name =
     profile?.display_name ||
@@ -1658,6 +1656,6 @@ async function saveAccess(){
 function f(id,label,type="text"){return `<div class="field"><label>${label}</label><input id="${id}" type="${type}"></div>`}
 function sel(id,label,opts){return `<div class="field"><label>${label}</label><select id="${id}">${opts.map(x=>`<option value="${x}">${x}</option>`).join("")}</select></div>`}
 function selObj(id,label,arr){return `<div class="field"><label>${label}</label><select id="${id}">${arr.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></div>`}
-$("#discordLogin").onclick=login;$("#logout").onclick=async()=>{sessionStorage.removeItem("cv_welcome_shown");await sb.auth.signOut();location.reload()};$("#nav").onclick=e=>{let b=e.target.closest("button[data-page]");if(b)render(b.dataset.page)};
+$("#discordLogin").onclick=login;$("#logout").onclick=async()=>{await sb.auth.signOut();location.reload()};$("#nav").onclick=e=>{let b=e.target.closest("button[data-page]");if(b)render(b.dataset.page)};
 sb.auth.onAuthStateChange(()=>setTimeout(boot,0));boot();
 </script></body></html>
