@@ -340,7 +340,68 @@ function dash(){
     })
     .slice(0,5);
 
+  const notifications=[];
+
+  overdueTasks.forEach(t=>{
+    notifications.push({
+      type:"Aufgabe",
+      text:`„${t.title}“ ist überfällig.`,
+      page:"tasks"
+    });
+  });
+
+  myOpenTasks.filter(t=>{
+    if(!t.due_date) return false;
+    const d=new Date(t.due_date+"T00:00:00");
+    return d.getTime()===today.getTime();
+  }).forEach(t=>{
+    notifications.push({
+      type:"Aufgabe",
+      text:`„${t.title}“ ist heute fällig.`,
+      page:"tasks"
+    });
+  });
+
+  activeWarns.forEach(w=>{
+    const end=new Date(w.expires_at);
+    const diff=Math.ceil((end-new Date())/(1000*60*60*24));
+    if(diff>=0 && diff<=3){
+      const creator=creators.find(c=>c.id===w.creator_id)?.name||"Creator";
+      notifications.push({
+        type:"Warn",
+        text:`Warn von ${creator} läuft ${diff===0?"heute":`in ${diff} Tag${diff===1?"":"en"}`} ab.`,
+        page:"warns"
+      });
+    }
+  });
+
+  liveStreams.forEach(s=>{
+    const creator=activeCreators.find(c=>twitchNameFromUrl(c.twitch_url)===String(s.user_login||"").toLowerCase());
+    notifications.push({
+      type:"Live",
+      text:`${creator?.name||s.user_name||s.user_login||"Ein Creator"} ist gerade live.`,
+      page:"live"
+    });
+  });
+
   return `
+    ${notifications.length?`
+      <div class="section" style="margin-top:0;margin-bottom:20px">
+        <div class="section-head">
+          <h2>Hinweise</h2>
+          <span class="pill">${notifications.length}</span>
+        </div>
+        <div style="display:grid;gap:9px">
+          ${notifications.slice(0,8).map(n=>`
+            <button class="card" onclick="render('${n.page}')" style="width:100%;text-align:left;color:var(--text);cursor:pointer">
+              <div class="small muted">${esc(n.type)}</div>
+              <b style="display:block;margin-top:4px">${esc(n.text)}</b>
+            </button>
+          `).join("")}
+        </div>
+      </div>
+    `:""}
+
     <div class="grid">
       ${metric("Probe Streamer",activeCreators.filter(c=>c.rank==="Probe Streamer").length)}
       ${metric("Streamer",activeCreators.filter(c=>c.rank==="Streamer").length)}
