@@ -420,11 +420,60 @@ function creatorTable(arr){
   </table></div>`;
 }
 
+
+function creatorRankHistory(creatorId){
+  const rows=creatorHistory
+    .filter(h=>String(h.creator_id)===String(creatorId))
+    .filter(h=>h.changes && h.changes.Rang)
+    .sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
+
+  return rows.map(h=>({
+    from:h.changes?.Rang?.alt ?? "–",
+    to:h.changes?.Rang?.neu ?? "–",
+    by:h.changed_by_name||"Unbekannt",
+    at:h.created_at
+  }));
+}
+
+function currentRankSince(c){
+  const history=creatorRankHistory(c.id);
+  const last=[...history].reverse().find(x=>String(x.to)===String(c.rank));
+  const start=last?.at || c.created_at || c.joined_at;
+  if(!start) return {date:"–",days:"–"};
+
+  const d=new Date(start);
+  const now=new Date();
+  const days=Math.max(0,Math.floor((now-d)/(1000*60*60*24)));
+  return {
+    date:d.toLocaleDateString("de-DE"),
+    days
+  };
+}
+
+function uprankHistoryHtml(c){
+  const rows=creatorRankHistory(c.id);
+  if(!rows.length){
+    return `<div class="card empty">Noch keine Rangänderung gespeichert.</div>`;
+  }
+
+  return `<div style="display:grid;gap:10px">
+    ${[...rows].reverse().map(r=>`
+      <div style="padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0f0d14">
+        <div><b>${esc(r.from)}</b> → <b>${esc(r.to)}</b></div>
+        <div class="muted small" style="margin-top:5px">
+          ${r.at?new Date(r.at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–"} · ${esc(r.by)}
+        </div>
+      </div>
+    `).join("")}
+  </div>`;
+}
+
 function openCreatorProfile(id){
   const c=creators.find(x=>x.id===id);
   if(!c) return alert("Creator wurde nicht gefunden.");
 
   const stats=twitchStatsForCreator(c.id);
+  const rankSince=currentRankSince(c);
   const creatorWarns=warns
     .filter(w=>w.creator_id===c.id && !w.archived)
     .sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
@@ -454,7 +503,7 @@ function openCreatorProfile(id){
   modal(
     `Creator-Profil – ${esc(c.name)}`,
     `<div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px">
-      ${metric("Rang",esc(c.rank||"–"))}
+      ${metric("Rang",`${esc(c.rank||"–")}<div class="muted small" style="margin-top:6px">seit ${esc(rankSince.date)} · ${esc(rankSince.days)} Tage</div>`)}
       ${metric("Streamtage 30T",stats.days)}
       ${metric("Ø Zuschauer",stats.avg)}
       ${metric("Peak",stats.peak)}
@@ -492,6 +541,11 @@ function openCreatorProfile(id){
     <div class="section">
       <div class="section-head"><h2>Creator-Warns</h2><span class="pill">${activeCreatorWarns.length} aktiv</span></div>
       ${warnHtml}
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h2>Uprank-Verlauf</h2><span class="pill">${creatorRankHistory(c.id).length} Änderungen</span></div>
+      ${uprankHistoryHtml(c)}
     </div>
 
     <div class="section">
