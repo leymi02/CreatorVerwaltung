@@ -1099,7 +1099,11 @@ function creatorModal(){if(!hasPerm("creator_create"))return alert("Keine Berech
     return;
   }
 
-  const syncResult=await syncDiscordCreatorRole(discordId,rank);
+  const syncResult=await syncDiscordCreatorRole(
+    discordId,
+    rank,
+    {announce:(rank==="Probe Streamer" ? "accepted" : null)}
+  );
   showDiscordSyncWarning(syncResult);
 
   closeModal();
@@ -1205,14 +1209,17 @@ async function updateCreator(id){
 
   const oldRank=existingCreator?.rank||null;
 
-  // Discord-Verkündung nur bei einem echten Uprank.
-  // Downranks und gleichbleibende Ränge lösen keine Nachricht aus.
+  // Nur echte Upranks verkünden; Downranks bleiben still.
+  const normalizeRank=value=>{
+    const v=String(value||"").trim();
+    return v==="Content Creator" ? "Creator" : v;
+  };
   const rankOrder=["Probe Streamer","Streamer","Creator","Creator+"];
-  const oldRankIndex=rankOrder.indexOf(oldRank);
-  const newRankIndex=rankOrder.indexOf(rank);
+  const oldRankIndex=rankOrder.indexOf(normalizeRank(oldRank));
+  const newRankIndex=rankOrder.indexOf(normalizeRank(rank));
   const isUprank=
-    oldRankIndex !== -1 &&
-    newRankIndex !== -1 &&
+    oldRankIndex >= 0 &&
+    newRankIndex >= 0 &&
     newRankIndex > oldRankIndex;
 
   // Oberfläche neu laden, aber Discord darf die UI nicht blockieren.
