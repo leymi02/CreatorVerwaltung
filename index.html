@@ -21,7 +21,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
   display:flex; align-items:center; justify-content:center;
   padding:24px;
   background:
-    radial-gradient(circle at 50% 20%, rgba(167,116,255,.20), transparent 34%),
+    radial-gradient(circle at 50% 18%, rgba(167,116,255,.20), transparent 35%),
     rgba(7,6,12,.96);
   backdrop-filter:blur(14px);
 }
@@ -125,8 +125,37 @@ async function boot(){
 
   await reload();
   render("dashboard");
+  showWelcome();
 }
 function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
+
+function showWelcome(){
+  if(sessionStorage.getItem("cv_welcome_shown")==="1") return;
+
+  sessionStorage.setItem("cv_welcome_shown","1");
+
+  const name =
+    profile?.display_name ||
+    access?.display_name ||
+    access?.discord_username ||
+    "";
+
+  const wrap=document.createElement("div");
+  wrap.className="cv-welcome";
+  wrap.id="cvWelcome";
+  wrap.innerHTML=`
+    <div class="cv-welcome-card">
+      <div class="cv-welcome-logo">CV</div>
+      <h1>Willkommen in der CreatorVerwaltung 💜</h1>
+      <div class="hello">${name ? `Hallo ${esc(name)}!` : "Schön, dass du da bist!"}</div>
+      <p>Vielen Dank, dass du die <strong>CreatorVerwaltung</strong> tagtäglich unterstützt und dazu beiträgst, dass alles organisiert und reibungslos läuft.</p>
+      <p>Sollten Fragen entstehen, Fehler auftreten oder du Unterstützung benötigen, wende dich bitte jederzeit an die <strong>Inhaberin Brownie</strong>.</p>
+      <p><strong>Danke für deine Unterstützung und viel Spaß bei der Arbeit! 💜</strong></p>
+      <button class="btn cv-welcome-btn" onclick="document.getElementById('cvWelcome')?.remove()">Zur CreatorVerwaltung</button>
+    </div>`;
+  document.body.appendChild(wrap);
+}
+
 async function reload(){
   const [c,w,e,t,cat,a,p,h,ts] = await Promise.all([
     sb.from("cv_creators").select("*").order("name"),
@@ -1629,54 +1658,6 @@ async function saveAccess(){
 function f(id,label,type="text"){return `<div class="field"><label>${label}</label><input id="${id}" type="${type}"></div>`}
 function sel(id,label,opts){return `<div class="field"><label>${label}</label><select id="${id}">${opts.map(x=>`<option value="${x}">${x}</option>`).join("")}</select></div>`}
 function selObj(id,label,arr){return `<div class="field"><label>${label}</label><select id="${id}">${arr.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></div>`}
-$("#discordLogin").onclick=login;$("#logout").onclick=async()=>{await sb.auth.signOut();location.reload()};$("#nav").onclick=e=>{let b=e.target.closest("button[data-page]");if(b)render(b.dataset.page)};
+$("#discordLogin").onclick=login;$("#logout").onclick=async()=>{sessionStorage.removeItem("cv_welcome_shown");await sb.auth.signOut();location.reload()};$("#nav").onclick=e=>{let b=e.target.closest("button[data-page]");if(b)render(b.dataset.page)};
 sb.auth.onAuthStateChange(()=>setTimeout(boot,0));boot();
-</script>
-<script>
-(function(){
-  function cvShowWelcomeOnce(){
-    if(sessionStorage.getItem("cv_welcome_shown")==="1") return;
-    const session = window.__cvCurrentSession || null;
-    // The app's authenticated UI is present only after successful login.
-    const appVisible = document.querySelector(".sidebar, aside, nav");
-    if(!appVisible) return;
-
-    sessionStorage.setItem("cv_welcome_shown","1");
-    const displayName =
-      (window.access && access.display_name) ||
-      (window.profile && profile.display_name) ||
-      "Schön, dass du da bist";
-
-    const wrap=document.createElement("div");
-    wrap.className="cv-welcome";
-    wrap.id="cvWelcome";
-    wrap.innerHTML=`
-      <div class="cv-welcome-card">
-        <div class="cv-welcome-logo">CV</div>
-        <h1>Willkommen in der CreatorVerwaltung 💜</h1>
-        <div class="hello">${displayName==="Schön, dass du da bist" ? displayName+"!" : "Hallo "+displayName+"!"}</div>
-        <p>Vielen Dank, dass du die <strong>CreatorVerwaltung</strong> tagtäglich unterstützt und dazu beiträgst, dass alles organisiert und reibungslos läuft.</p>
-        <p>Sollten Fragen entstehen, Fehler auftreten oder du Unterstützung benötigen, wende dich bitte jederzeit an die <strong>Inhaberin Brownie</strong>.</p>
-        <p><strong>Danke für deine Unterstützung und viel Spaß bei der Arbeit! 💜</strong></p>
-        <button class="btn primary cv-welcome-btn" onclick="document.getElementById('cvWelcome')?.remove()">Zur CreatorVerwaltung</button>
-      </div>`;
-    document.body.appendChild(wrap);
-  }
-
-  // Wait until the existing login/auth code has rendered the authenticated app.
-  let tries=0;
-  const timer=setInterval(()=>{
-    tries++;
-    const loginScreen=document.querySelector("#loginView,.login-card,.auth-card");
-    const sidebar=document.querySelector(".sidebar");
-    if(sidebar && (!loginScreen || getComputedStyle(loginScreen).display==="none")){
-      clearInterval(timer);
-      cvShowWelcomeOnce();
-    } else if(tries>80){
-      clearInterval(timer);
-    }
-  },250);
-})();
-</script>
-
-</body></html>
+</script></body></html>
