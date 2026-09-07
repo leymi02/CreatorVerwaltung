@@ -404,7 +404,7 @@ function creatorTable(arr){
       ${(hasPerm("creator_edit")||hasPerm("creator_delete")) ? "<th>Aktionen</th>" : ""}
     </tr></thead>
     <tbody>${arr.map(c=>`<tr>
-      <td><b>${esc(c.name)}</b></td>
+      <td><button class="btn secondary" style="padding:6px 10px" onclick="openCreatorProfile(\'${c.id}\')">${esc(c.name)}</button></td>
       <td>${esc(c.rank)}</td>
       <td>${c.twitch_url?`<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>`:"–"}</td>
       <td>${esc(c.created_by_name||"–")}</td>
@@ -419,6 +419,95 @@ function creatorTable(arr){
     </tr>`).join("")}</tbody>
   </table></div>`;
 }
+
+function openCreatorProfile(id){
+  const c=creators.find(x=>x.id===id);
+  if(!c) return alert("Creator wurde nicht gefunden.");
+
+  const stats=twitchStatsForCreator(c.id);
+  const creatorWarns=warns
+    .filter(w=>w.creator_id===c.id && !w.archived)
+    .sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+
+  const activeCreatorWarns=creatorWarns.filter(w=>new Date(w.expires_at)>new Date());
+
+  const warnHtml=creatorWarns.length
+    ? `<div class="table-wrap"><table>
+        <thead><tr><th>Grund</th><th>Dauer</th><th>Endet</th><th>Status</th></tr></thead>
+        <tbody>${creatorWarns.map(w=>{
+          const active=new Date(w.expires_at)>new Date();
+          return `<tr>
+            <td>${esc(w.reason)}</td>
+            <td>${Number(w.duration_days||0)} Tage</td>
+            <td>${w.expires_at?new Date(w.expires_at).toLocaleDateString("de-DE"):"–"}</td>
+            <td><span class="pill">${active?"Aktiv":"Abgelaufen"}</span></td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table></div>`
+    : `<div class="card empty">Keine Creator-Warns vorhanden.</div>`;
+
+  const links=[
+    c.twitch_url?`<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>`:"",
+    c.tiktok_url?`<a href="${esc(c.tiktok_url)}" target="_blank">TikTok öffnen</a>`:""
+  ].filter(Boolean).join(" · ") || "–";
+
+  modal(
+    `Creator-Profil – ${esc(c.name)}`,
+    `<div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px">
+      ${metric("Rang",esc(c.rank||"–"))}
+      ${metric("Streamtage 30T",stats.days)}
+      ${metric("Ø Zuschauer",stats.avg)}
+      ${metric("Peak",stats.peak)}
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="form-grid">
+        <div class="field">
+          <label>Discord-ID</label>
+          <div>${esc(c.discord_id||"–")}</div>
+        </div>
+        <div class="field">
+          <label>Dabei seit</label>
+          <div>${c.joined_at?new Date(String(c.joined_at).slice(0,10)+"T00:00:00").toLocaleDateString("de-DE"):"–"}</div>
+        </div>
+        <div class="field">
+          <label>Links</label>
+          <div>${links}</div>
+        </div>
+        <div class="field">
+          <label>Aktive Warns</label>
+          <div>${activeCreatorWarns.length}</div>
+        </div>
+        <div class="field full">
+          <label>Interne Info</label>
+          <div style="white-space:pre-wrap">${esc(c.summary||"–")}</div>
+        </div>
+        <div class="field full">
+          <label>Erstellt von</label>
+          <div>${esc(c.created_by_name||"–")}${c.created_at?` · ${new Date(c.created_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"})}`:""}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h2>Creator-Warns</h2><span class="pill">${activeCreatorWarns.length} aktiv</span></div>
+      ${warnHtml}
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h2>Änderungsverlauf</h2></div>
+      <div class="card">
+        ${creatorHistoryHtml(c.id)}
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:18px;justify-content:flex-end">
+      ${hasPerm("creator_edit")?`<button class="btn" onclick="closeModal();editCreator('${c.id}')">✎ Bearbeiten</button>`:""}
+      <button class="btn secondary" onclick="closeModal()">Schließen</button>
+    </div>`
+  );
+}
+
 function creatorPage(){
   if(!hasPerm("creator_view")) return permissionDenied();
   const activeCreators=creators.filter(c=>!c.archived);
@@ -797,7 +886,12 @@ async function savePermissions(discordId){
   render("access");
 }
 
-function modal(title,body,save){$("#modalRoot").innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><b>${title}</b><button class="btn secondary" onclick="closeModal()">✕</button></div>${body}<div class="actions" style="margin-top:18px"><button class="btn" onclick="${save}">Speichern</button><button class="btn secondary" onclick="closeModal()">Abbrechen</button></div></div></div>`}
+function modal(title,body,save){
+  const footer=save
+    ? `<div class="actions" style="margin-top:18px"><button class="btn" onclick="${save}">Speichern</button><button class="btn secondary" onclick="closeModal()">Abbrechen</button></div>`
+    : "";
+  $("#modalRoot").innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><b>${title}</b><button class="btn secondary" onclick="closeModal()">✕</button></div>${body}${footer}</div></div>`;
+}
 function closeModal(){$("#modalRoot").innerHTML=""}
 function creatorModal(){if(!hasPerm("creator_create"))return alert("Keine Berechtigung.");modal("Creator anlegen",`<div class="form-grid">${f("cname","Name")}${sel("crank","Rang",["Probe Streamer","Streamer","Creator","Creator+"])}${f("cdiscord","Discord-ID")}${f("ctwitch","Twitch-Link")}${f("ctiktok","TikTok-Link")}${f("cjoined","Dabei seit","date")}<div class="field full"><label>Interne Info</label><textarea id="csummary"></textarea></div></div>`,"saveCreator()")}
  async function saveCreator(){
