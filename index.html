@@ -14,6 +14,41 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:12px;color:var(--muted)}input,select,textarea{background:#0f0d14;border:1px solid var(--line);color:#fff;border-radius:11px;padding:11px}textarea{min-height:95px;resize:vertical}
 .modal-bg{position:fixed;inset:0;background:#000b;display:grid;place-items:center;padding:20px;z-index:20}.modal{width:min(680px,100%);max-height:90vh;overflow:auto;background:#17141f;border:1px solid var(--line);border-radius:22px;padding:22px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.actions{display:flex;gap:8px;flex-wrap:wrap}.small{font-size:12px}.notice{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#15121d;color:var(--muted);margin:10px 0}
 @media(max-width:950px){.section[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}.shell{grid-template-columns:1fr}.side{height:auto;position:static;border-right:0;border-bottom:1px solid var(--line)}.side-bottom{position:static;margin-top:15px}.grid{grid-template-columns:1fr 1fr}.main{padding:22px}.nav{display:flex;overflow:auto}.nav button{width:auto;white-space:nowrap}}@media(max-width:560px){.grid,.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+
+/* Login-Willkommensbildschirm */
+.cv-welcome{
+  position:fixed; inset:0; z-index:99999;
+  display:flex; align-items:center; justify-content:center;
+  padding:24px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(167,116,255,.20), transparent 34%),
+    rgba(7,6,12,.96);
+  backdrop-filter:blur(14px);
+}
+.cv-welcome-card{
+  width:min(620px,100%);
+  padding:42px 36px;
+  border:1px solid rgba(198,169,255,.22);
+  border-radius:26px;
+  background:linear-gradient(145deg,rgba(29,23,45,.98),rgba(15,13,24,.98));
+  box-shadow:0 28px 90px rgba(0,0,0,.5),0 0 50px rgba(150,92,255,.10);
+  text-align:center;
+}
+.cv-welcome-logo{
+  width:76px;height:76px;margin:0 auto 22px;
+  display:grid;place-items:center;
+  border-radius:22px;
+  font-size:26px;font-weight:900;letter-spacing:-1px;
+  color:#fff;
+  background:linear-gradient(145deg,#9d72ff,#6e45c8);
+  box-shadow:0 12px 34px rgba(126,77,224,.32);
+}
+.cv-welcome-card h1{margin:0 0 10px;font-size:30px}
+.cv-welcome-card .hello{font-size:18px;font-weight:700;margin-bottom:18px}
+.cv-welcome-card p{max-width:510px;margin:0 auto 13px;line-height:1.65;color:var(--muted)}
+.cv-welcome-card strong{color:var(--text)}
+.cv-welcome-btn{margin-top:18px;min-width:220px}
+
 </style>
 </head>
 <body>
@@ -1596,4 +1631,52 @@ function sel(id,label,opts){return `<div class="field"><label>${label}</label><s
 function selObj(id,label,arr){return `<div class="field"><label>${label}</label><select id="${id}">${arr.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></div>`}
 $("#discordLogin").onclick=login;$("#logout").onclick=async()=>{await sb.auth.signOut();location.reload()};$("#nav").onclick=e=>{let b=e.target.closest("button[data-page]");if(b)render(b.dataset.page)};
 sb.auth.onAuthStateChange(()=>setTimeout(boot,0));boot();
-</script></body></html>
+</script>
+<script>
+(function(){
+  function cvShowWelcomeOnce(){
+    if(sessionStorage.getItem("cv_welcome_shown")==="1") return;
+    const session = window.__cvCurrentSession || null;
+    // The app's authenticated UI is present only after successful login.
+    const appVisible = document.querySelector(".sidebar, aside, nav");
+    if(!appVisible) return;
+
+    sessionStorage.setItem("cv_welcome_shown","1");
+    const displayName =
+      (window.access && access.display_name) ||
+      (window.profile && profile.display_name) ||
+      "Schön, dass du da bist";
+
+    const wrap=document.createElement("div");
+    wrap.className="cv-welcome";
+    wrap.id="cvWelcome";
+    wrap.innerHTML=`
+      <div class="cv-welcome-card">
+        <div class="cv-welcome-logo">CV</div>
+        <h1>Willkommen in der CreatorVerwaltung 💜</h1>
+        <div class="hello">${displayName==="Schön, dass du da bist" ? displayName+"!" : "Hallo "+displayName+"!"}</div>
+        <p>Vielen Dank, dass du die <strong>CreatorVerwaltung</strong> tagtäglich unterstützt und dazu beiträgst, dass alles organisiert und reibungslos läuft.</p>
+        <p>Sollten Fragen entstehen, Fehler auftreten oder du Unterstützung benötigen, wende dich bitte jederzeit an die <strong>Inhaberin Brownie</strong>.</p>
+        <p><strong>Danke für deine Unterstützung und viel Spaß bei der Arbeit! 💜</strong></p>
+        <button class="btn primary cv-welcome-btn" onclick="document.getElementById('cvWelcome')?.remove()">Zur CreatorVerwaltung</button>
+      </div>`;
+    document.body.appendChild(wrap);
+  }
+
+  // Wait until the existing login/auth code has rendered the authenticated app.
+  let tries=0;
+  const timer=setInterval(()=>{
+    tries++;
+    const loginScreen=document.querySelector("#loginView,.login-card,.auth-card");
+    const sidebar=document.querySelector(".sidebar");
+    if(sidebar && (!loginScreen || getComputedStyle(loginScreen).display==="none")){
+      clearInterval(timer);
+      cvShowWelcomeOnce();
+    } else if(tries>80){
+      clearInterval(timer);
+    }
+  },250);
+})();
+</script>
+
+</body></html>
