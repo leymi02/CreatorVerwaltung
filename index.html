@@ -13,7 +13,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:linear-gradient(180deg,#17141f,#121019);border:1px solid var(--line);border-radius:19px;padding:20px}.metric b{font-size:29px;display:block;margin-top:8px}.section{margin-top:20px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:12px}.section h2{font-size:18px;margin:0}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:17px}table{width:100%;border-collapse:collapse;background:#121019}th,td{padding:13px 14px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}tr:last-child td{border-bottom:0}.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff536d;margin-right:7px}.empty{text-align:center;padding:42px;color:var(--muted)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:12px;color:var(--muted)}input,select,textarea{background:#0f0d14;border:1px solid var(--line);color:#fff;border-radius:11px;padding:11px}textarea{min-height:95px;resize:vertical}
 .modal-bg{position:fixed;inset:0;background:#000b;display:grid;place-items:center;padding:20px;z-index:20}.modal{width:min(680px,100%);max-height:90vh;overflow:auto;background:#17141f;border:1px solid var(--line);border-radius:22px;padding:22px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.actions{display:flex;gap:8px;flex-wrap:wrap}.small{font-size:12px}.notice{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#15121d;color:var(--muted);margin:10px 0}
-@media(max-width:950px){.shell{grid-template-columns:1fr}.side{height:auto;position:static;border-right:0;border-bottom:1px solid var(--line)}.side-bottom{position:static;margin-top:15px}.grid{grid-template-columns:1fr 1fr}.main{padding:22px}.nav{display:flex;overflow:auto}.nav button{width:auto;white-space:nowrap}}@media(max-width:560px){.grid,.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+@media(max-width:950px){.section[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}.shell{grid-template-columns:1fr}.side{height:auto;position:static;border-right:0;border-bottom:1px solid var(--line)}.side-bottom{position:static;margin-top:15px}.grid{grid-template-columns:1fr 1fr}.main{padding:22px}.nav{display:flex;overflow:auto}.nav button{width:auto;white-space:nowrap}}@media(max-width:560px){.grid,.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
 </style>
 </head>
 <body>
@@ -299,9 +299,101 @@ function render(p){
   const fn={dashboard:dash,creators:creatorPage,live:livePage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,archive:archivePage,access:accessPage}[p];
   $("#content").innerHTML=fn();
 }
-function dash(){const activeCreators=creators.filter(c=>!c.archived);let live=liveStreams.length;return `<div class="grid">
-${metric("Probe Streamer",activeCreators.filter(c=>c.rank==="Probe Streamer").length)}${metric("Streamer",activeCreators.filter(c=>c.rank==="Streamer").length)}${metric("Creator",activeCreators.filter(c=>c.rank==="Creator").length)}${metric("Aktive Warns",warns.filter(w=>new Date(w.expires_at)>new Date()).length)}
-</div><div class="section"><div class="section-head"><h2>30-Tage-Aktivität</h2><span class="pill">${live} live</span></div>${creatorTable(activeCreators.slice(0,8))}</div>`}
+function dash(){
+  const activeCreators=creators.filter(c=>!c.archived);
+  const activeWarns=warns.filter(w=>!w.archived && new Date(w.expires_at)>new Date());
+
+  const today=new Date();
+  today.setHours(0,0,0,0);
+
+  const myOpenTasks=tasks.filter(t=>!t.done);
+  const overdueTasks=myOpenTasks.filter(t=>{
+    if(!t.due_date) return false;
+    const d=new Date(t.due_date+"T00:00:00");
+    return d<today;
+  });
+
+  const upcomingEvents=events
+    .filter(e=>!e.archived && e.event_date && new Date(e.event_date+"T00:00:00")>=today)
+    .sort((a,b)=>{
+      const ad=new Date(`${a.event_date}T${a.event_time||"23:59"}`).getTime();
+      const bd=new Date(`${b.event_date}T${b.event_time||"23:59"}`).getTime();
+      return ad-bd;
+    })
+    .slice(0,5);
+
+  const liveCreatorRows=liveStreams.slice(0,5).map(s=>{
+    const creator=activeCreators.find(c=>twitchNameFromUrl(c.twitch_url)===String(s.user_login||"").toLowerCase());
+    const url=creator?.twitch_url||`https://www.twitch.tv/${encodeURIComponent(s.user_login||"")}`;
+    return `<tr>
+      <td><span class="live-dot"></span><b>${esc(creator?.name||s.user_name||s.user_login||"Twitch")}</b></td>
+      <td>${Number(s.viewer_count||0).toLocaleString("de-DE")}</td>
+      <td><a href="${esc(url)}" target="_blank">Öffnen</a></td>
+    </tr>`;
+  }).join("");
+
+  const taskPreview=myOpenTasks
+    .sort((a,b)=>{
+      const ad=a.due_date?new Date(a.due_date+"T00:00:00").getTime():Infinity;
+      const bd=b.due_date?new Date(b.due_date+"T00:00:00").getTime():Infinity;
+      return ad-bd;
+    })
+    .slice(0,5);
+
+  return `
+    <div class="grid">
+      ${metric("Probe Streamer",activeCreators.filter(c=>c.rank==="Probe Streamer").length)}
+      ${metric("Streamer",activeCreators.filter(c=>c.rank==="Streamer").length)}
+      ${metric("Creator",activeCreators.filter(c=>c.rank==="Creator").length)}
+      ${metric("Creator+",activeCreators.filter(c=>c.rank==="Creator+").length)}
+    </div>
+
+    <div class="grid section">
+      ${metric("Gerade live",liveStreams.length)}
+      ${metric("Aktive Warns",activeWarns.length)}
+      ${metric("Offene Aufgaben",myOpenTasks.length)}
+      ${metric("Überfällig",overdueTasks.length)}
+    </div>
+
+    <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card">
+        <div class="section-head"><h2>Meine Aufgaben</h2><button class="btn secondary" onclick="render('tasks')">Alle öffnen</button></div>
+        ${taskPreview.length?taskPreview.map(t=>{
+          const due=t.due_date?new Date(t.due_date+"T00:00:00"):null;
+          const overdue=due && due<today;
+          const dueText=t.due_date?new Date(t.due_date+"T00:00:00").toLocaleDateString("de-DE"):"ohne Termin";
+          return `<div style="padding:10px 0;border-bottom:1px solid var(--line)">
+            <b>${esc(t.title)}</b>
+            <div class="muted small" style="margin-top:4px">${esc(t.priority||"Normal")} · ${esc(dueText)}${overdue?" · Überfällig":""}</div>
+          </div>`;
+        }).join(""):`<div class="empty">Keine offenen Aufgaben.</div>`}
+      </div>
+
+      <div class="card">
+        <div class="section-head"><h2>Nächste Termine</h2><button class="btn secondary" onclick="render('calendar')">Alle öffnen</button></div>
+        ${upcomingEvents.length?upcomingEvents.map(e=>`
+          <div style="padding:10px 0;border-bottom:1px solid var(--line)">
+            <b>${esc(e.title)}</b>
+            <div class="muted small" style="margin-top:4px">${new Date(e.event_date+"T00:00:00").toLocaleDateString("de-DE")}${e.event_time?" · "+esc(String(e.event_time).slice(0,5)):""}</div>
+          </div>
+        `).join(""):`<div class="empty">Keine kommenden Termine.</div>`}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h2>Live Creator</h2><span class="pill">${liveStreams.length} live</span></div>
+      ${liveCreatorRows?`<div class="table-wrap"><table>
+        <thead><tr><th>Creator</th><th>Zuschauer</th><th>Twitch</th></tr></thead>
+        <tbody>${liveCreatorRows}</tbody>
+      </table></div>`:`<div class="card empty">Aktuell ist keiner live.</div>`}
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h2>30-Tage-Aktivität</h2><span class="pill">${activeCreators.length} Creator</span></div>
+      ${creatorTable(activeCreators.slice(0,8))}
+    </div>
+  `;
+}
 function metric(a,b){return `<div class="card metric"><span class="muted">${a}</span><b>${b}</b></div>`}
 function creatorTable(arr){
   if(!arr.length) return `<div class="card empty">Noch keine Creator angelegt.</div>`;
