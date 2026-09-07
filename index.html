@@ -1198,17 +1198,42 @@ async function updateCreator(id){
     return;
   }
 
-  if(oldDiscordId && oldDiscordId!==discordId){
-    const oldSync=await syncDiscordCreatorRole(oldDiscordId,null);
-    showDiscordSyncWarning(oldSync);
-  }
-
-  const syncResult=await syncDiscordCreatorRole(discordId,rank,{announce:(c.rank!==rank ? "uprank" : null),oldRank:c.rank});
-  showDiscordSyncWarning(syncResult);
-
+  // Datenbank ist bereits gespeichert:
+  // UI sofort schließen und neu laden, damit ein Discord-Fehler
+  // das Speichern auf der Website nicht blockiert.
   closeModal();
   await reload();
   render("creators");
+
+  // Discord danach separat synchronisieren.
+  try{
+    if(oldDiscordId && oldDiscordId!==discordId){
+      const oldSync=await Promise.race([
+        syncDiscordCreatorRole(oldDiscordId,null),
+        new Promise(resolve=>setTimeout(
+          ()=>resolve({success:false,error:"Discord-Rollensync Zeitüberschreitung."}),
+          10000
+        ))
+      ]);
+      showDiscordSyncWarning(oldSync);
+    }
+
+    const syncResult=await Promise.race([
+      syncDiscordCreatorRole(
+        discordId,
+        rank,
+        {announce:(c.rank!==rank ? "uprank" : null),oldRank:c.rank}
+      ),
+      new Promise(resolve=>setTimeout(
+        ()=>resolve({success:false,error:"Discord-Rollensync Zeitüberschreitung."}),
+        10000
+      ))
+    ]);
+    showDiscordSyncWarning(syncResult);
+  }catch(err){
+    console.error("Discord-Sync nach Creator-Speicherung:",err);
+    alert("Creator wurde gespeichert, aber der Discord-Rollensync ist fehlgeschlagen.");
+  }
 }
 
 async function deleteCreator(id){
