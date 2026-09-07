@@ -225,27 +225,25 @@ function twitchStatsForCreator(id){
   };
 }
 
-async function syncDiscordCreatorRole(discordId, rank){
+async function syncDiscordCreatorRole(discordId, rank, options={}){
   const id=String(discordId||"").trim();
   if(!id) return {success:true, skipped:true};
 
-  const {data,error}=await sb.functions.invoke("cv-discord-roles",{
-    body:{
-      discord_id:id,
-      rank:rank===undefined ? null : rank
-    }
-  });
+  const body={discord_id:id,rank:rank===undefined ? null : rank};
+
+  if(options?.announce) body.announce=options.announce;
+  if(options?.oldRank) body.old_rank=options.oldRank;
+
+  const {data,error}=await sb.functions.invoke("cv-discord-roles",{body});
 
   if(error){
     console.error("cv-discord-roles:",error);
     return {success:false,error:error.message||"Discord-Rollensync fehlgeschlagen."};
   }
-
   if(!data?.success){
     console.error("cv-discord-roles:",data);
     return {success:false,error:data?.error||"Discord-Rollensync fehlgeschlagen."};
   }
-
   return {success:true,data};
 }
 
@@ -1205,7 +1203,7 @@ async function updateCreator(id){
     showDiscordSyncWarning(oldSync);
   }
 
-  const syncResult=await syncDiscordCreatorRole(discordId,rank);
+  const syncResult=await syncDiscordCreatorRole(discordId,rank,{announce:(c.rank!==rank ? "uprank" : null),oldRank:c.rank});
   showDiscordSyncWarning(syncResult);
 
   closeModal();
