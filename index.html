@@ -72,7 +72,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
 const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], streamReviews=[], liveStreams=[], liveLoading=false, liveError="", twitchStats30d=[], taskFilter="open";
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], streamReviews=[], liveStreams=[], liveLoading=false, liveError="", twitchStats30d=[], taskFilter="open", streamReviewFilter="open";
 
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
@@ -716,7 +716,10 @@ function livePage(){
   </div>`;
 }
 function streamReviewStatusLabel(status){
-  return ({open:"Offen",no_violation:"Kein Verstoß",observe:"Beobachten",conversation:"Gespräch",warn:"Creator Warn"})[status]||status||"Offen";
+  return ({open:"Offen",no_violation:"Kein Verstoß",observe:"Beobachten",conversation:"Gespräch nötig",reviewed:"Geprüft"})[status]||status||"Offen";
+}
+function streamReviewResultLabel(result){
+  return ({no_violation:"Kein Verstoß",observe:"Beobachten",conversation:"Gespräch nötig",other:"Sonstiges"})[result]||"Geprüft";
 }
 function streamOffsetLabel(seconds){
   if(seconds===null||seconds===undefined||seconds==="") return "–";
@@ -724,63 +727,112 @@ function streamOffsetLabel(seconds){
   const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=Math.floor(total%60);
   return [h,m,s].map(v=>String(v).padStart(2,"0")).join(":");
 }
+function streamOccurrenceLabel(review){
+  if(!review?.stream_started_at || review?.stream_offset_seconds===null || review?.stream_offset_seconds===undefined || review?.stream_offset_seconds==="") return "–";
+  const started=new Date(review.stream_started_at);
+  if(Number.isNaN(started.getTime())) return "–";
+  const occurrence=new Date(started.getTime()+(Math.max(0,Number(review.stream_offset_seconds)||0)*1000));
+  return occurrence.toLocaleString("de-DE",{dateStyle:"short",timeStyle:"medium"});
+}
+function setStreamReviewFilter(filter){
+  streamReviewFilter=filter;
+  render("streamchecks");
+}
 function streamChecksPage(){
   if(!hasPerm("stream_checks_view")) return permissionDenied();
-  const rows=[...streamReviews];
-  const openCount=rows.filter(r=>r.status==="open").length;
+  const allRows=[...streamReviews];
+  const openRows=allRows.filter(r=>!r.completed);
+  const completedRows=allRows.filter(r=>!!r.completed);
+  const rows=streamReviewFilter==="completed"?completedRows:streamReviewFilter==="all"?allRows:openRows;
   const today=new Date().toLocaleDateString("de-DE");
-  const todayCount=rows.filter(r=>r.detected_at && new Date(r.detected_at).toLocaleDateString("de-DE")===today).length;
-  const reviewedCount=rows.filter(r=>r.status && r.status!=="open").length;
+  const todayCount=allRows.filter(r=>r.detected_at && new Date(r.detected_at).toLocaleDateString("de-DE")===today).length;
   const canEdit=hasPerm("stream_checks_edit");
+  const filterBtn=(key,label,count)=>`<button class="btn ${streamReviewFilter===key?"":"secondary"}" onclick="setStreamReviewFilter('${key}')">${label} (${count})</button>`;
   return `<div class="grid">
-    ${metric("Offen",openCount)}
+    ${metric("Offen",openRows.length)}
     ${metric("Heute erkannt",todayCount)}
-    ${metric("Bereits geprüft",reviewedCount)}
-    ${metric("Gesamt",rows.length)}
+    ${metric("Abgehakt",completedRows.length)}
+    ${metric("Gesamt",allRows.length)}
   </div>
   <div class="section">
-    <div class="section-head"><h2>Erkannte Stream-Auffälligkeiten</h2><span class="pill">Automatische Hinweise · keine automatische Sanktion</span></div>
-    <div class="notice">Hier landen später automatisch auffällige Stellen aus laufenden Streams. Ein Treffer ist nur ein Prüfhinweis und muss von der CreatorVerwaltung bewertet werden.</div>
+    <div class="section-head"><h2>Erkannte Stream-Auffälligkeiten</h2><span class="pill">Nur Prüfhinweise · keine automatische Sanktion</span></div>
+    <div class="notice">Das System markiert nur möglicherweise auffällige Situationen wie RDM, VDM, Baiting, Trolling, Provokation oder mögliches Meta. Die endgültige Bewertung erfolgt immer durch die CreatorVerwaltung.</div>
+    <div class="actions" style="margin:14px 0">
+      ${filterBtn("open","Offen",openRows.length)}
+      ${filterBtn("completed","✓ Abgehakt",completedRows.length)}
+      ${filterBtn("all","Alle",allRows.length)}
+    </div>
     ${rows.length?`<div class="table-wrap"><table>
-      <thead><tr><th>Creator</th><th>Erkannt</th><th>Stream-Zeit</th><th>Kategorie</th><th>Hinweis</th><th>Sicherheit</th><th>Status</th>${canEdit?"<th>Prüfen</th>":""}</tr></thead>
+      <thead><tr><th>Creator</th><th>Erkannt um</th><th>Stelle im Stream</th><th>Zeitpunkt</th><th>Kategorie</th><th>Hinweis</th><th>Sicherheit</th><th>Prüfung</th>${canEdit?"<th>Aktion</th>":""}</tr></thead>
       <tbody>${rows.map(r=>{
         const c=creators.find(x=>String(x.id)===String(r.creator_id));
         const confidence=r.confidence===null||r.confidence===undefined?"–":`${Math.round(Number(r.confidence)*100)} %`;
-        const detected=r.detected_at?new Date(r.detected_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–";
+        const detected=r.detected_at?new Date(r.detected_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"medium"}):"–";
+        const occurrence=streamOccurrenceLabel(r);
+        const completedAt=r.completed_at?new Date(r.completed_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–";
+        const reviewInfo=r.completed
+          ? `<span class="pill">✓ ${esc(streamReviewResultLabel(r.review_result))}</span><div class="small" style="margin-top:7px">Bearbeitet von <b>${esc(r.completed_by_name||"Unbekannt")}</b><br>${esc(completedAt)}</div>`
+          : `<span class="pill">Offen</span><div class="small" style="margin-top:7px">Noch nicht abgehakt</div>`;
         return `<tr>
           <td><b>${esc(c?.name||"Unbekannt")}</b></td>
           <td>${esc(detected)}</td>
-          <td>${esc(streamOffsetLabel(r.stream_offset_seconds))}</td>
+          <td><b>${esc(streamOffsetLabel(r.stream_offset_seconds))}</b></td>
+          <td>${esc(occurrence)}</td>
           <td>${esc(r.category||"Auffälligkeit")}</td>
-          <td style="white-space:normal;min-width:260px">${esc(r.summary||"–")}</td>
+          <td style="white-space:normal;min-width:280px">${esc(r.summary||"–")}</td>
           <td>${esc(confidence)}</td>
-          <td><span class="pill">${esc(streamReviewStatusLabel(r.status))}</span></td>
-          ${canEdit?`<td><div class="actions">
-            ${r.status!=="no_violation"?`<button class="btn secondary" onclick="updateStreamReviewStatus('${r.id}','no_violation')">Kein Verstoß</button>`:""}
-            ${r.status!=="observe"?`<button class="btn secondary" onclick="updateStreamReviewStatus('${r.id}','observe')">Beobachten</button>`:""}
-            ${r.status!=="conversation"?`<button class="btn secondary" onclick="updateStreamReviewStatus('${r.id}','conversation')">Gespräch</button>`:""}
-            <button class="btn" onclick="openWarnFromStreamReview('${r.id}')">Creator Warn</button>
-          </div></td>`:""}
+          <td>${reviewInfo}</td>
+          ${canEdit?`<td>${r.completed
+            ? `<button class="btn secondary" onclick="reopenStreamReview('${r.id}')">↶ Wieder öffnen</button>`
+            : `<button class="btn" onclick="completeStreamReviewModal('${r.id}')">✓ Prüfung abschließen</button>`}</td>`:""}
         </tr>`;
       }).join("")}</tbody>
-    </table></div>`:`<div class="card empty">Noch keine Stream-Auffälligkeiten erkannt.</div>`}
+    </table></div>`:`<div class="card empty">${streamReviewFilter==="completed"?"Noch keine Prüfungen abgehakt.":streamReviewFilter==="open"?"Keine offenen Stream-Prüfungen.":"Noch keine Stream-Auffälligkeiten erkannt."}</div>`}
   </div>`;
 }
-async function updateStreamReviewStatus(id,status){
+function completeStreamReviewModal(id){
   if(!hasPerm("stream_checks_edit")) return alert("Keine Berechtigung.");
-  const {error}=await sb.rpc("cv_update_stream_review_status",{p_id:id,p_status:status});
-  if(error){console.error(error);alert("Prüfstatus konnte nicht gespeichert werden: "+error.message);return;}
+  const review=streamReviews.find(r=>String(r.id)===String(id));
+  const creator=creators.find(c=>String(c.id)===String(review?.creator_id));
+  modal("Stream-Prüfung abschließen",`
+    <div class="notice">Du hakst die Prüfung für <b>${esc(creator?.name||"Unbekannt")}</b> bei <b>${esc(streamOffsetLabel(review?.stream_offset_seconds))}</b> ab. Dadurch wird kein Creator Warn erstellt.</div>
+    <div class="field"><label>Ergebnis der Prüfung</label><select id="streamReviewResult">
+      <option value="no_violation">Kein Verstoß</option>
+      <option value="observe">Beobachten</option>
+      <option value="conversation">Gespräch nötig</option>
+      <option value="other">Sonstiges / intern geklärt</option>
+    </select></div>
+  `,`completeStreamReview('${id}')`);
+}
+async function completeStreamReview(id){
+  if(!hasPerm("stream_checks_edit")) return alert("Keine Berechtigung.");
+  const result=$("#streamReviewResult")?.value;
+  const review=streamReviews.find(r=>String(r.id)===String(id));
+  const creator=creators.find(c=>String(c.id)===String(review?.creator_id));
+  const {error}=await sb.rpc("cv_complete_stream_review",{p_id:id,p_result:result});
+  if(error){console.error(error);alert("Prüfung konnte nicht abgeschlossen werden: "+error.message);return;}
+  closeModal();
+  const discordResult=await sb.functions.invoke("cv-discord-stream-checks",{body:{
+    action:"completed",
+    discord_id:creator?.discord_id||"",
+    creator_name:creator?.name||"Unbekannt",
+    category:review?.category||"Auffälligkeit",
+    stream_offset_seconds:review?.stream_offset_seconds,
+    result:streamReviewResultLabel(result),
+    reviewed_at:new Date().toISOString()
+  }});
+  if(discordResult.error || !discordResult.data?.success){
+    console.error("cv-discord-stream-checks:",discordResult.error||discordResult.data);
+    alert("Die Prüfung wurde abgehakt, aber die Discord-Meldung konnte nicht gesendet werden.");
+  }
   await reload();render("streamchecks");
 }
-function openWarnFromStreamReview(id){
-  if(!hasPerm("warns_create")) return alert("Du hast keine Berechtigung, Creator Warns anzulegen.");
-  const r=streamReviews.find(x=>String(x.id)===String(id));
-  if(!r) return alert("Prüfung wurde nicht gefunden.");
-  warnModal();
-  const creatorEl=document.getElementById("wcreator");
-  const reasonEl=document.getElementById("wreason");
-  if(creatorEl) creatorEl.value=r.creator_id||"";
-  if(reasonEl) reasonEl.value=`Stream-Prüfung: ${r.category||"Auffälligkeit"}${r.summary?" – "+r.summary:""}`;
+async function reopenStreamReview(id){
+  if(!hasPerm("stream_checks_edit")) return alert("Keine Berechtigung.");
+  if(!confirm("Diese Stream-Prüfung wirklich wieder öffnen?")) return;
+  const {error}=await sb.rpc("cv_reopen_stream_review",{p_id:id});
+  if(error){console.error(error);alert("Prüfung konnte nicht wieder geöffnet werden: "+error.message);return;}
+  await reload();render("streamchecks");
 }
 function warnPage(){
   if(!hasPerm("warns_view")) return permissionDenied();
