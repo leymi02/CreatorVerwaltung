@@ -1329,6 +1329,8 @@ async function saveWarn(){
     return;
   }
 
+  const creator = creators.find(c=>c.id===creatorId);
+
   const {error} = await sb.rpc("cv_add_warn", {
     p_creator_id: creatorId,
     p_reason: reason,
@@ -1341,9 +1343,42 @@ async function saveWarn(){
     return;
   }
 
+  // Creator Warn zusätzlich automatisch im Discord posten.
+  // Der Warn bleibt gespeichert, auch wenn Discord einmal nicht erreichbar ist.
+  let discordWarnError = null;
+  const creatorDiscordId = String(creator?.discord_id || "").trim();
+
+  if(/^\d{15,25}$/.test(creatorDiscordId)){
+    const expiresAt = new Date(Date.now() + durationDays * 86400000).toISOString();
+    const {data:discordWarnData,error:discordWarnInvokeError} = await sb.functions.invoke(
+      "cv-discord-warns",
+      {
+        body:{
+          discord_id:creatorDiscordId,
+          creator_name:creator?.name || "Creator",
+          reason,
+          duration_days:durationDays,
+          expires_at:expiresAt
+        }
+      }
+    );
+
+    if(discordWarnInvokeError || !discordWarnData?.success){
+      discordWarnError = discordWarnInvokeError?.message || discordWarnData?.error || "Discord-Nachricht fehlgeschlagen.";
+      console.error("cv-discord-warns:", discordWarnInvokeError || discordWarnData);
+    }
+  }else{
+    discordWarnError = "Beim Creator ist keine gültige Discord-ID hinterlegt.";
+    console.warn("Creator Warn wurde gespeichert, aber Discord-Post übersprungen:", discordWarnError);
+  }
+
   closeModal();
   await reload();
   render("warns");
+
+  if(discordWarnError){
+    alert("Creator Warn wurde gespeichert, aber nicht im Discord gepostet: " + discordWarnError);
+  }
 }
 function editWarn(id){
   if(!hasPerm("warns_edit")) return alert("Keine Berechtigung.");
