@@ -755,7 +755,13 @@ function streamChecksPage(){
     ${metric("Gesamt",allRows.length)}
   </div>
   <div class="section">
-    <div class="section-head"><h2>Erkannte Stream-Auffälligkeiten</h2><span class="pill">Nur Prüfhinweise · keine automatische Sanktion</span></div>
+    <div class="section-head">
+      <h2>Erkannte Stream-Auffälligkeiten</h2>
+      <div class="actions">
+        ${access?.role==="owner"?`<button class="btn secondary" onclick="triggerStreamReviewTest()">🧪 Test-Auffälligkeit auslösen</button>`:""}
+        <span class="pill">Nur Prüfhinweise · keine automatische Sanktion</span>
+      </div>
+    </div>
     <div class="notice">Das System markiert nur möglicherweise auffällige Situationen wie RDM, VDM, Baiting, Trolling, Provokation oder mögliches Meta. Die endgültige Bewertung erfolgt immer durch die CreatorVerwaltung.</div>
     <div class="actions" style="margin:14px 0">
       ${filterBtn("open","Offen",openRows.length)}
@@ -790,6 +796,65 @@ function streamChecksPage(){
     </table></div>`:`<div class="card empty">${streamReviewFilter==="completed"?"Noch keine Prüfungen abgehakt.":streamReviewFilter==="open"?"Keine offenen Stream-Prüfungen.":"Noch keine Stream-Auffälligkeiten erkannt."}</div>`}
   </div>`;
 }
+
+async function triggerStreamReviewTest(){
+  if(access?.role!=="owner") return alert("Der Test ist nur für die Inhaberin verfügbar.");
+
+  const activeCreators=creators.filter(c=>!c.archived);
+  if(!activeCreators.length) return alert("Es ist kein aktiver Creator vorhanden.");
+
+  const creator=activeCreators[0];
+  const now=new Date();
+  const started=new Date(now.getTime()-(42*60*1000));
+  const offset=1235;
+
+  const {data:inserted,error}=await sb
+    .from("cv_stream_reviews")
+    .insert({
+      creator_id:creator.id,
+      stream_started_at:started.toISOString(),
+      detected_at:now.toISOString(),
+      stream_offset_seconds:offset,
+      category:"Mögliches Baiting",
+      summary:"Testmeldung: Das System hat möglicherweise provozierendes Verhalten erkannt.",
+      confidence:0.87,
+      evidence_text:"Automatischer Test der Stream-Prüfung.",
+      status:"open",
+      completed:false
+    })
+    .select("*")
+    .single();
+
+  if(error){
+    console.error("Test-Auffälligkeit:",error);
+    alert("Test-Auffälligkeit konnte nicht erstellt werden: "+error.message);
+    return;
+  }
+
+  const {data,error:discordError}=await sb.functions.invoke("cv-discord-stream-checks",{body:{
+    action:"detected",
+    discord_id:creator.discord_id||"",
+    creator_name:creator.name||"Unbekannt",
+    category:inserted?.category||"Mögliches Baiting",
+    summary:inserted?.summary||"Test-Auffälligkeit",
+    confidence:inserted?.confidence ?? 0.87,
+    detected_at:inserted?.detected_at||now.toISOString(),
+    stream_offset_seconds:inserted?.stream_offset_seconds ?? offset,
+    source_url:creator.twitch_url||""
+  }});
+
+  await reload();
+  render("streamchecks");
+
+  if(discordError || !data?.success){
+    console.error("cv-discord-stream-checks:",discordError||data);
+    alert("Die Test-Auffälligkeit wurde auf der Webseite erstellt, aber die Discord-Benachrichtigung konnte nicht gesendet werden.");
+    return;
+  }
+
+  alert("Test erfolgreich: Auffälligkeit wurde auf der Webseite erstellt und an Discord gemeldet.");
+}
+
 function completeStreamReviewModal(id){
   if(!hasPerm("stream_checks_edit")) return alert("Keine Berechtigung.");
   const review=streamReviews.find(r=>String(r.id)===String(id));
