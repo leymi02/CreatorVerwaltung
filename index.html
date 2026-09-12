@@ -800,57 +800,21 @@ function streamChecksPage(){
 async function triggerStreamReviewTest(){
   if(access?.role!=="owner") return alert("Der Test ist nur für die Inhaberin verfügbar.");
 
-  const activeCreators=creators.filter(c=>!c.archived);
-  if(!activeCreators.length) return alert("Es ist kein aktiver Creator vorhanden.");
+  const {data,error}=await sb.functions.invoke("cv-discord-stream-checks",{body:{
+    action:"test_detected"
+  }});
 
-  const creator=activeCreators[0];
-  const now=new Date();
-  const started=new Date(now.getTime()-(42*60*1000));
-  const offset=1235;
-
-  const {data:inserted,error}=await sb
-    .from("cv_stream_reviews")
-    .insert({
-      creator_id:creator.id,
-      stream_started_at:started.toISOString(),
-      detected_at:now.toISOString(),
-      stream_offset_seconds:offset,
-      category:"Mögliches Baiting",
-      summary:"Testmeldung: Das System hat möglicherweise provozierendes Verhalten erkannt.",
-      confidence:0.87,
-      evidence_text:"Automatischer Test der Stream-Prüfung.",
-      status:"open",
-      completed:false
-    })
-    .select("*")
-    .single();
-
-  if(error){
-    console.error("Test-Auffälligkeit:",error);
-    alert("Test-Auffälligkeit konnte nicht erstellt werden: "+error.message);
+  if(error || !data?.success){
+    console.error("cv-discord-stream-checks test:",error||data);
+    alert(
+      "Test-Auffälligkeit konnte nicht ausgelöst werden: " +
+      (error?.message || data?.error || "Unbekannter Fehler.")
+    );
     return;
   }
-
-  const {data,error:discordError}=await sb.functions.invoke("cv-discord-stream-checks",{body:{
-    action:"detected",
-    discord_id:creator.discord_id||"",
-    creator_name:creator.name||"Unbekannt",
-    category:inserted?.category||"Mögliches Baiting",
-    summary:inserted?.summary||"Test-Auffälligkeit",
-    confidence:inserted?.confidence ?? 0.87,
-    detected_at:inserted?.detected_at||now.toISOString(),
-    stream_offset_seconds:inserted?.stream_offset_seconds ?? offset,
-    source_url:creator.twitch_url||""
-  }});
 
   await reload();
   render("streamchecks");
-
-  if(discordError || !data?.success){
-    console.error("cv-discord-stream-checks:",discordError||data);
-    alert("Die Test-Auffälligkeit wurde auf der Webseite erstellt, aber die Discord-Benachrichtigung konnte nicht gesendet werden.");
-    return;
-  }
 
   alert("Test erfolgreich: Auffälligkeit wurde auf der Webseite erstellt und an Discord gemeldet.");
 }
