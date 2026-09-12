@@ -61,7 +61,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 <div id="app" class="shell hidden">
  <aside class="side"><div class="brand">CreatorVerwaltung</div><div class="nav" id="nav">
   <button data-page="dashboard" class="active">Dashboard</button><button data-page="creators">Creator</button><button data-page="live">Live jetzt</button>
-  <button data-page="warns">Creator Warns</button><button data-page="calendar">Termine</button><button data-page="tasks">Meine Aufgaben</button>
+  <button data-page="streamchecks">Stream-Prüfungen</button><button data-page="warns">Creator Warns</button><button data-page="calendar">Termine</button><button data-page="tasks">Meine Aufgaben</button>
   <button data-page="settings">Baukasten</button><button data-page="archive" class="owner-only">Archiv</button><button data-page="access" class="owner-only">Zugriffsverwaltung</button>
  </div><div class="side-bottom"><div id="who" class="pill"></div><button id="logout" class="btn secondary" style="width:100%;margin-top:10px">Abmelden</button></div></aside>
  <main class="main"><div class="top"><div><h1 id="pageTitle">Dashboard</h1><div class="muted" id="subtitle">Deine Creator-Verwaltung auf einen Blick.</div></div><div class="pill" id="rolePill"></div></div><div id="content"></div></main>
@@ -72,7 +72,7 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPABASE_URL="https://sivdyarxpeuvvpdmzycw.supabase.co";
 const SUPABASE_KEY="sb_publishable_dS1-tlpJEbpX8jW0vFHGkQ_Dfu_plgQ";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], liveStreams=[], liveLoading=false, liveError="", twitchStats30d=[], taskFilter="open";
+let me=null, profile=null, access=null, creators=[], warns=[], events=[], tasks=[], categories=[], accesses=[], permissions=[], creatorHistory=[], streamReviews=[], liveStreams=[], liveLoading=false, liveError="", twitchStats30d=[], taskFilter="open";
 
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function discordIdFromUser(u){const md=u?.user_metadata||{};return String(md.provider_id||md.sub||u?.identities?.find(x=>x.provider==="discord")?.identity_data?.sub||u?.identities?.find(x=>x.provider==="discord")?.id||"")}
@@ -155,7 +155,7 @@ function showWelcome(){
 }
 
 async function reload(){
-  const [c,w,e,t,cat,a,p,h,ts] = await Promise.all([
+  const [c,w,e,t,cat,a,p,h,sr,ts] = await Promise.all([
     sb.from("cv_creators").select("*").order("name"),
     sb.from("cv_warns").select("*").order("created_at",{ascending:false}),
     sb.from("cv_events").select("*").order("event_date"),
@@ -164,6 +164,7 @@ async function reload(){
     sb.from("cv_access").select("*").order("created_at"),
     sb.from("cv_permissions").select("*"),
     sb.from("cv_creator_history").select("*").order("created_at",{ascending:false}),
+    sb.from("cv_stream_reviews").select("*").order("detected_at",{ascending:false}),
     sb.rpc("cv_get_twitch_stats_30d")
   ]);
 
@@ -175,6 +176,8 @@ async function reload(){
   accesses = a.data || [];
   permissions = p.data || [];
   creatorHistory = h.data || [];
+  streamReviews = sr.data || [];
+  if(sr.error) console.error("cv_stream_reviews:",sr.error);
   twitchStats30d = ts.data || [];
   applyPermissionUI();
 }
@@ -192,6 +195,7 @@ function applyPermissionUI(){
   const rules = {
     creators:"creator_view",
     live:"live_view",
+    streamchecks:"stream_checks_view",
     warns:"warns_view",
     calendar:"events_view",
     tasks:"tasks_view",
@@ -349,14 +353,14 @@ function renderLiveStatusArea(){
   </table></div>`;
 }
 
-function setPageTitle(p){const m={dashboard:["Dashboard","Deine Creator-Verwaltung auf einen Blick."],creators:["Creator","Profile, Links, Statistiken und interne Informationen."],live:["Live jetzt","Aktuelle Streams und gespeicherte Peak-Zuschauer."],warns:["Creator Warns","Warnungen und Laufzeiten übersichtlich verwalten."],calendar:["Termine","Persönliche und gemeinsame Termine."],tasks:["Meine Aufgaben","Deine privaten To-dos."],settings:["Baukasten","Kategorien der Verwaltung selbst organisieren."],archive:["Archiv","Gelöschte Einträge 30 Tage lang nachvollziehen und wiederherstellen."],access:["Zugriffsverwaltung","Du entscheidest, welche Discord-Accounts Zugriff haben."]};$("#pageTitle").textContent=m[p][0];$("#subtitle").textContent=m[p][1]}
+function setPageTitle(p){const m={dashboard:["Dashboard","Deine Creator-Verwaltung auf einen Blick."],creators:["Creator","Profile, Links, Statistiken und interne Informationen."],live:["Live jetzt","Aktuelle Streams und gespeicherte Peak-Zuschauer."],streamchecks:["Stream-Prüfungen","Automatisch erkannte Auffälligkeiten aus Creator-Streams prüfen."],warns:["Creator Warns","Warnungen und Laufzeiten übersichtlich verwalten."],calendar:["Termine","Persönliche und gemeinsame Termine."],tasks:["Meine Aufgaben","Deine privaten To-dos."],settings:["Baukasten","Kategorien der Verwaltung selbst organisieren."],archive:["Archiv","Gelöschte Einträge 30 Tage lang nachvollziehen und wiederherstellen."],access:["Zugriffsverwaltung","Du entscheidest, welche Discord-Accounts Zugriff haben."]};$("#pageTitle").textContent=m[p][0];$("#subtitle").textContent=m[p][1]}
 function render(p){
-  const perms={creators:"creator_view",live:"live_view",warns:"warns_view",calendar:"events_view",tasks:"tasks_view",settings:"builder_view"};
+  const perms={creators:"creator_view",live:"live_view",streamchecks:"stream_checks_view",warns:"warns_view",calendar:"events_view",tasks:"tasks_view",settings:"builder_view"};
   if((p==="access" || p==="archive") && access.role!=="owner") p="dashboard";
   if(perms[p] && !hasPerm(perms[p])) p="dashboard";
   setPageTitle(p);
   document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));
-  const fn={dashboard:dash,creators:creatorPage,live:livePage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,archive:archivePage,access:accessPage}[p];
+  const fn={dashboard:dash,creators:creatorPage,live:livePage,streamchecks:streamChecksPage,warns:warnPage,calendar:eventPage,tasks:taskPage,settings:settingsPage,archive:archivePage,access:accessPage}[p];
   $("#content").innerHTML=fn();
 }
 function dash(){
@@ -433,6 +437,15 @@ function dash(){
         page:"warns"
       });
     }
+  });
+
+  streamReviews.filter(r=>r.status==="open").slice(0,5).forEach(r=>{
+    const creator=creators.find(c=>String(c.id)===String(r.creator_id))?.name||"Creator";
+    notifications.push({
+      type:"Stream-Prüfung",
+      text:`${creator}: ${r.category||"Auffälligkeit"} wartet auf Prüfung.`,
+      page:"streamchecks"
+    });
   });
 
   liveStreams.forEach(s=>{
@@ -701,6 +714,73 @@ function livePage(){
     <div class="section-head"><h2>Live Streams</h2><button class="btn secondary" onclick="refreshLiveStreams(true)">↻ Aktualisieren</button></div>
     <div id="liveStatusArea"><div class="card empty">Twitch wird gerade abgefragt …</div></div>
   </div>`;
+}
+function streamReviewStatusLabel(status){
+  return ({open:"Offen",no_violation:"Kein Verstoß",observe:"Beobachten",conversation:"Gespräch",warn:"Creator Warn"})[status]||status||"Offen";
+}
+function streamOffsetLabel(seconds){
+  if(seconds===null||seconds===undefined||seconds==="") return "–";
+  const total=Math.max(0,Number(seconds)||0);
+  const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=Math.floor(total%60);
+  return [h,m,s].map(v=>String(v).padStart(2,"0")).join(":");
+}
+function streamChecksPage(){
+  if(!hasPerm("stream_checks_view")) return permissionDenied();
+  const rows=[...streamReviews];
+  const openCount=rows.filter(r=>r.status==="open").length;
+  const today=new Date().toLocaleDateString("de-DE");
+  const todayCount=rows.filter(r=>r.detected_at && new Date(r.detected_at).toLocaleDateString("de-DE")===today).length;
+  const reviewedCount=rows.filter(r=>r.status && r.status!=="open").length;
+  const canEdit=hasPerm("stream_checks_edit");
+  return `<div class="grid">
+    ${metric("Offen",openCount)}
+    ${metric("Heute erkannt",todayCount)}
+    ${metric("Bereits geprüft",reviewedCount)}
+    ${metric("Gesamt",rows.length)}
+  </div>
+  <div class="section">
+    <div class="section-head"><h2>Erkannte Stream-Auffälligkeiten</h2><span class="pill">Automatische Hinweise · keine automatische Sanktion</span></div>
+    <div class="notice">Hier landen später automatisch auffällige Stellen aus laufenden Streams. Ein Treffer ist nur ein Prüfhinweis und muss von der CreatorVerwaltung bewertet werden.</div>
+    ${rows.length?`<div class="table-wrap"><table>
+      <thead><tr><th>Creator</th><th>Erkannt</th><th>Stream-Zeit</th><th>Kategorie</th><th>Hinweis</th><th>Sicherheit</th><th>Status</th>${canEdit?"<th>Prüfen</th>":""}</tr></thead>
+      <tbody>${rows.map(r=>{
+        const c=creators.find(x=>String(x.id)===String(r.creator_id));
+        const confidence=r.confidence===null||r.confidence===undefined?"–":`${Math.round(Number(r.confidence)*100)} %`;
+        const detected=r.detected_at?new Date(r.detected_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}):"–";
+        return `<tr>
+          <td><b>${esc(c?.name||"Unbekannt")}</b></td>
+          <td>${esc(detected)}</td>
+          <td>${esc(streamOffsetLabel(r.stream_offset_seconds))}</td>
+          <td>${esc(r.category||"Auffälligkeit")}</td>
+          <td style="white-space:normal;min-width:260px">${esc(r.summary||"–")}</td>
+          <td>${esc(confidence)}</td>
+          <td><span class="pill">${esc(streamReviewStatusLabel(r.status))}</span></td>
+          ${canEdit?`<td><div class="actions">
+            ${r.status!=="no_violation"?`<button class="btn secondary" onclick="updateStreamReviewStatus('${r.id}','no_violation')">Kein Verstoß</button>`:""}
+            ${r.status!=="observe"?`<button class="btn secondary" onclick="updateStreamReviewStatus('${r.id}','observe')">Beobachten</button>`:""}
+            ${r.status!=="conversation"?`<button class="btn secondary" onclick="updateStreamReviewStatus('${r.id}','conversation')">Gespräch</button>`:""}
+            <button class="btn" onclick="openWarnFromStreamReview('${r.id}')">Creator Warn</button>
+          </div></td>`:""}
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>`:`<div class="card empty">Noch keine Stream-Auffälligkeiten erkannt.</div>`}
+  </div>`;
+}
+async function updateStreamReviewStatus(id,status){
+  if(!hasPerm("stream_checks_edit")) return alert("Keine Berechtigung.");
+  const {error}=await sb.rpc("cv_update_stream_review_status",{p_id:id,p_status:status});
+  if(error){console.error(error);alert("Prüfstatus konnte nicht gespeichert werden: "+error.message);return;}
+  await reload();render("streamchecks");
+}
+function openWarnFromStreamReview(id){
+  if(!hasPerm("warns_create")) return alert("Du hast keine Berechtigung, Creator Warns anzulegen.");
+  const r=streamReviews.find(x=>String(x.id)===String(id));
+  if(!r) return alert("Prüfung wurde nicht gefunden.");
+  warnModal();
+  const creatorEl=document.getElementById("wcreator");
+  const reasonEl=document.getElementById("wreason");
+  if(creatorEl) creatorEl.value=r.creator_id||"";
+  if(reasonEl) reasonEl.value=`Stream-Prüfung: ${r.category||"Auffälligkeit"}${r.summary?" – "+r.summary:""}`;
 }
 function warnPage(){
   if(!hasPerm("warns_view")) return permissionDenied();
@@ -987,6 +1067,7 @@ const permissionGroups=[
   ["Creator",[["creator_view","Ansehen"],["creator_create","Anlegen"],["creator_edit","Bearbeiten"],["creator_delete","Löschen"]]],
   ["Creator Warns",[["warns_view","Ansehen"],["warns_create","Warn hinzufügen"],["warns_edit","Warn bearbeiten"],["warns_delete","Warn löschen"]]],
   ["Live",[["live_view","Ansehen"]]],
+  ["Stream-Prüfungen",[["stream_checks_view","Ansehen"],["stream_checks_edit","Prüfstatus bearbeiten"]]],
   ["Termine",[["events_view","Ansehen"],["events_create","Anlegen"],["events_edit","Bearbeiten"],["events_delete","Löschen"]]],
   ["Aufgaben",[["tasks_view","Ansehen"],["tasks_create","Anlegen"],["tasks_edit","Bearbeiten"],["tasks_delete","Löschen"]]],
   ["Baukasten",[["builder_view","Ansehen"],["builder_edit","Bearbeiten"]]]
