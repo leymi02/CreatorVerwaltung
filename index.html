@@ -682,6 +682,26 @@ function openCreatorProfile(id){
   );
 }
 
+function creatorPage(){
+  if(!hasPerm("creator_view")) return permissionDenied();
+  const activeCreators=creators.filter(c=>!c.archived);
+  return `<div class="section-head"><h2>Alle Creator</h2>${hasPerm("creator_create")?`<button class="btn" onclick="creatorModal()">+ Creator anlegen</button>`:""}</div>${creatorTable(activeCreators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden.</div>`;
+}
+function livePage(){
+  const activeCreators=creators.filter(c=>!c.archived);
+  setTimeout(()=>refreshLiveStreams(true),0);
+  return `<div class="grid">
+    ${metric("Gerade live",liveStreams.length)}
+    ${metric("Höchster 30T-Peak",Math.max(0,...activeCreators.map(c=>twitchStatsForCreator(c.id).peak)))}
+    ${metric("Erfasste Creator",activeCreators.filter(c=>c.twitch_url).length)}
+    ${metric("Plattform","Twitch")}
+  </div>
+  <div class="section">
+    <div class="section-head"><h2>Live Streams</h2><button class="btn secondary" onclick="refreshLiveStreams(true)">↻ Aktualisieren</button></div>
+    <div id="liveStatusArea"><div class="card empty">Twitch wird gerade abgefragt …</div></div>
+  </div>`;
+}
+
 function statsMinutesLabel(minutes){
   const total=Math.max(0,Math.round(Number(minutes)||0));
   const h=Math.floor(total/60),m=total%60;
