@@ -735,8 +735,17 @@ function statsChange(current,previous,digits=0,suffix=""){
   const a=Number(current)||0,b=Number(previous)||0,d=a-b;
   const sign=d>0?"+":d<0?"":"±";
   const cls=d>0?"var(--good)":d<0?"var(--bad)":"var(--muted)";
-  const text=digits?d.toFixed(digits):Math.round(d).toString();
+  const text=digits?Math.abs(d).toFixed(digits):Math.abs(Math.round(d)).toString();
   return `<span style="color:${cls};font-weight:800">${sign}${text}${suffix}</span>`;
+}
+function statsMinutesChange(current,previous){
+  const d=(Number(current)||0)-(Number(previous)||0);
+  const sign=d>0?"+":d<0?"−":"±";
+  const cls=d>0?"var(--good)":d<0?"var(--bad)":"var(--muted)";
+  return `<span style="color:${cls};font-weight:800">${sign}${statsMinutesLabel(Math.abs(d))}</span>`;
+}
+function statsCompareLine(current,previous,formatter,changeHtml){
+  return `<div class="small muted" style="margin-top:7px">Vorher: ${formatter(previous)}</div><div class="small" style="margin-top:3px">Änderung: ${changeHtml}</div>`;
 }
 function statsSnapshotPair(creatorId){
   const rows=statsSnapshots
@@ -756,23 +765,30 @@ function statsPage(){
     const {current,previous}=statsSnapshotPair(c.id);
     if(!current) return `<div class="card"><div class="section-head"><h2>${esc(c.name)}</h2><span class="pill">${esc(c.rank||"–")}</span></div><div class="empty">Noch keine 14-Tage-Auswertung gespeichert.</div></div>`;
     const p=previous||{};
-    return `<div class="card">
-      <div class="section-head"><div><h2>${esc(c.name)}</h2><div class="muted small">${statsDateLabel(current.period_start)} – ${statsDateLabel(current.period_end)}</div></div><span class="pill">${esc(c.rank||"–")}</span></div>
-      <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:14px">
-        ${metric("Streamtage",`${Number(current.stream_days||0)}<div class="small" style="margin-top:5px">${statsChange(current.stream_days,p.stream_days)}</div>`)}
-        ${metric("Streams",`${Number(current.stream_count||0)}<div class="small" style="margin-top:5px">${statsChange(current.stream_count,p.stream_count)}</div>`)}
-        ${metric("Streamzeit",`${statsMinutesLabel(current.total_stream_minutes)}<div class="small" style="margin-top:5px">vorher ${statsMinutesLabel(p.total_stream_minutes)}</div>`)}
-        ${metric("Ø Zuschauer",`${Number(current.average_viewers||0).toFixed(1)}<div class="small" style="margin-top:5px">${statsChange(current.average_viewers,p.average_viewers,1)}</div>`)}
-        ${metric("Peak",`${Number(current.peak_viewers||0)}<div class="small" style="margin-top:5px">${statsChange(current.peak_viewers,p.peak_viewers)}</div>`)}
-        ${metric("Prüfhinweise",`${Number(current.review_count||0)}<div class="small" style="margin-top:5px">${statsChange(current.review_count,p.review_count)}</div>`)}
+    const n=v=>Number(v||0);
+    const one=v=>n(v).toFixed(1);
+    return `<div class="card" style="padding:24px">
+      <div class="section-head" style="margin-bottom:18px">
+        <div><h2 style="font-size:22px">${esc(c.name)}</h2><div class="muted small" style="margin-top:5px">Aktueller Zeitraum · ${statsDateLabel(current.period_start)} – ${statsDateLabel(current.period_end)}</div></div>
+        <span class="pill">${esc(c.rank||"–")}</span>
       </div>
-      <div class="notice" style="margin-top:14px">Letzter Stream: <b>${statsDateLabel(current.last_stream_at,true)}</b> · Vergleich jeweils mit den vorherigen 14 Tagen.</div>
-      <div class="actions"><button class="btn secondary" onclick="openStatsHistory('${c.id}')">Verlauf anzeigen</button></div>
+      <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+        ${metric("Streamtage",`${n(current.stream_days)}${statsCompareLine(current.stream_days,p.stream_days,v=>n(v),statsChange(current.stream_days,p.stream_days))}`)}
+        ${metric("Streams",`${n(current.stream_count)}${statsCompareLine(current.stream_count,p.stream_count,v=>n(v),statsChange(current.stream_count,p.stream_count))}`)}
+        ${metric("Streamzeit",`${statsMinutesLabel(current.total_stream_minutes)}${statsCompareLine(current.total_stream_minutes,p.total_stream_minutes,statsMinutesLabel,statsMinutesChange(current.total_stream_minutes,p.total_stream_minutes))}`)}
+        ${metric("Ø Zuschauer",`${one(current.average_viewers)}${statsCompareLine(current.average_viewers,p.average_viewers,one,statsChange(current.average_viewers,p.average_viewers,1))}`)}
+        ${metric("Peak",`${n(current.peak_viewers)}${statsCompareLine(current.peak_viewers,p.peak_viewers,v=>n(v),statsChange(current.peak_viewers,p.peak_viewers))}`)}
+        ${metric("Prüfhinweise",`${n(current.review_count)}${statsCompareLine(current.review_count,p.review_count,v=>n(v),statsChange(current.review_count,p.review_count))}`)}
+      </div>
+      <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="card" style="background:#0f0d14"><div class="muted small">Letzter Stream</div><b style="display:block;margin-top:7px">${statsDateLabel(current.last_stream_at,true)}</b></div>
+        <div class="card" style="background:#0f0d14"><div class="muted small">Vergleichszeitraum</div><b style="display:block;margin-top:7px">${previous?`${statsDateLabel(previous.period_start)} – ${statsDateLabel(previous.period_end)}`:"Noch kein vorheriger Zeitraum"}</b></div>
+      </div>
+      <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn secondary" onclick="openStatsHistory('${c.id}')">Auswertungsverlauf anzeigen</button></div>
     </div>`;
   }).join("");
-  return `<div class="section-head"><h2>14-Tage-Auswertungen</h2><span class="pill">Automatisch alle 2 Wochen</span></div>
-    <div class="notice">Die gespeicherten Auswertungen zeigen Streamaktivität, Zuschauerwerte und Prüfhinweise. Änderungen beziehen sich auf den vorherigen 14-Tage-Zeitraum.</div>
-    <div style="display:grid;gap:14px">${cards||`<div class="card empty">Keine aktiven Creator vorhanden.</div>`}</div>`;
+  return `<div class="section-head"><div><h2>14-Tage-Auswertungen</h2><div class="muted small" style="margin-top:5px">Aktuelle Werte mit direktem Vergleich zum vorherigen Zeitraum.</div></div><span class="pill">Automatisch alle 2 Wochen</span></div>
+    <div style="display:grid;gap:16px">${cards||`<div class="card empty">Keine aktiven Creator vorhanden.</div>`}</div>`;
 }
 function openStatsHistory(creatorId){
   const c=creators.find(x=>String(x.id)===String(creatorId));
