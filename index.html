@@ -249,6 +249,78 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)!important;box
 @media(max-width:1180px){.theme-grid{grid-template-columns:repeat(2,minmax(210px,1fr))!important}}
 @media(max-width:650px){.theme-grid{grid-template-columns:1fr!important}.theme-preview{height:150px!important}}
 
+
+
+/* ===== THEME MATCH FIX: echte Hintergrundstimmung passend zu den Design-Vorschauen ===== */
+body{
+  --theme-bg-image:none;
+  background:var(--bg)!important;
+}
+body[data-theme="feminine"]{--theme-bg-image:url("theme-assets/feminine-bg.jpg")}
+body[data-theme="masculine"]{--theme-bg-image:url("theme-assets/masculine-bg.jpg")}
+body[data-theme="retro"]{--theme-bg-image:url("theme-assets/retro-bg.jpg")}
+body[data-theme="neutral"]{--theme-bg-image:url("theme-assets/neutral-bg.jpg")}
+body[data-theme="aesthetic"]{--theme-bg-image:url("theme-assets/aesthetic-bg.jpg")}
+body[data-theme="modern"]{--theme-bg-image:url("theme-assets/modern-bg.jpg")}
+body[data-theme="elegant"]{--theme-bg-image:url("theme-assets/elegant-bg.jpg")}
+body[data-theme="mlg"]{--theme-bg-image:url("theme-assets/mlg-bg.jpg")}
+body[data-theme="custom"]{--theme-bg-image:none}
+
+/* Das Theme-Artwork ist jetzt derselbe Look wie in der Vorschau, statt nur ein generischer Farbverlauf. */
+body::before{
+  content:""!important;
+  position:fixed!important;
+  inset:0!important;
+  z-index:0!important;
+  pointer-events:none!important;
+  background-image:
+    linear-gradient(180deg,rgba(5,6,10,.17),rgba(5,6,10,.34)),
+    var(--theme-bg-image),
+    var(--theme-art,none)!important;
+  background-size:cover,cover,cover!important;
+  background-position:center,center top,center!important;
+  background-repeat:no-repeat!important;
+  background-attachment:fixed!important;
+  opacity:1!important;
+}
+body[data-theme="custom"]::before{
+  background-image:var(--theme-art,none)!important;
+}
+.shell{position:relative!important;z-index:1!important;background:transparent!important}
+.main{background:transparent!important}
+.side{
+  background:color-mix(in srgb,var(--bg) 80%,transparent)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(115%);
+  backdrop-filter:blur(18px) saturate(115%);
+}
+
+/* Panels werden leicht transparenter, damit das echte Theme-Artwork sichtbar bleibt. */
+.card,.table-wrap,.notice,.userbox,.modal{
+  background:linear-gradient(180deg,
+    color-mix(in srgb,var(--theme-surface-2) 86%,transparent),
+    color-mix(in srgb,var(--theme-surface) 82%,transparent))!important;
+  -webkit-backdrop-filter:blur(13px) saturate(115%);
+  backdrop-filter:blur(13px) saturate(115%);
+}
+
+/* Theme-spezifische Details näher an den erstellten Entwürfen. */
+body[data-theme="feminine"] .card,
+body[data-theme="aesthetic"] .card{box-shadow:0 10px 30px rgba(0,0,0,.28),0 0 24px var(--theme-glow)!important}
+body[data-theme="retro"] .card,
+body[data-theme="retro"] .table-wrap{border-color:color-mix(in srgb,var(--accent) 44%,var(--accent2) 22%)!important;box-shadow:0 0 18px rgba(255,63,207,.16),0 0 10px rgba(32,217,255,.09)!important}
+body[data-theme="elegant"] .card,
+body[data-theme="elegant"] .table-wrap{border-color:rgba(215,178,109,.36)!important;box-shadow:0 12px 34px rgba(0,0,0,.34),0 0 20px rgba(215,178,109,.10)!important}
+body[data-theme="mlg"] .card:nth-child(odd){border-color:rgba(255,122,24,.36)!important}
+body[data-theme="mlg"] .card:nth-child(even){border-color:rgba(0,216,240,.34)!important}
+body[data-theme="mlg"] .metric:nth-child(odd) .metric-icon{color:#ff8a2a!important}
+body[data-theme="mlg"] .metric:nth-child(even) .metric-icon{color:#1ee7f2!important}
+
+/* Die Vorschaubilder zeigen exakt das Theme, das auch verwendet wird. */
+.theme-option[data-theme="feminine"] .theme-preview{box-shadow:inset 0 0 0 1px rgba(255,130,200,.25)}
+.theme-option[data-theme="masculine"] .theme-preview{box-shadow:inset 0 0 0 1px rgba(90,169,255,.25)}
+.theme-option[data-theme="retro"] .theme-preview{box-shadow:inset 0 0 0 1px rgba(255,63,207,.28)}
+.theme-option[data-theme="elegant"] .theme-preview{box-shadow:inset 0 0 0 1px rgba(215,178,109,.28)}
+.theme-option[data-theme="mlg"] .theme-preview{box-shadow:inset 0 0 0 1px rgba(0,216,240,.28)}
 </style>
 </head>
 <body>
