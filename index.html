@@ -615,109 +615,71 @@ function openCreatorProfile(id){
   const creatorWarns=warns
     .filter(w=>w.creator_id===c.id && !w.archived)
     .sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
-
   const activeCreatorWarns=creatorWarns.filter(w=>new Date(w.expires_at)>new Date());
+  const creatorReviews=streamReviews
+    .filter(r=>String(r.creator_id)===String(c.id))
+    .sort((a,b)=>new Date(b.detected_at||b.created_at||0)-new Date(a.detected_at||a.created_at||0));
+  const openReviews=creatorReviews.filter(r=>!r.completed);
+  const {current:currentStats,previous:previousStats}=statsSnapshotPair(c.id);
 
   const warnHtml=creatorWarns.length
     ? `<div class="table-wrap"><table>
         <thead><tr><th>Grund</th><th>Dauer</th><th>Endet</th><th>Status</th></tr></thead>
         <tbody>${creatorWarns.map(w=>{
           const active=new Date(w.expires_at)>new Date();
-          return `<tr>
-            <td>${esc(w.reason)}</td>
-            <td>${Number(w.duration_days||0)} Tage</td>
-            <td>${w.expires_at?new Date(w.expires_at).toLocaleDateString("de-DE"):"–"}</td>
-            <td><span class="pill">${active?"Aktiv":"Abgelaufen"}</span></td>
-          </tr>`;
+          return `<tr><td>${esc(w.reason)}</td><td>${Number(w.duration_days||0)} Tage</td><td>${w.expires_at?new Date(w.expires_at).toLocaleDateString("de-DE"):"–"}</td><td><span class="pill">${active?"Aktiv":"Abgelaufen"}</span></td></tr>`;
         }).join("")}</tbody>
       </table></div>`
     : `<div class="card empty">Keine Creator-Warns vorhanden.</div>`;
 
-  const links=[
-    c.twitch_url?`<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>`:"",
-    c.tiktok_url?`<a href="${esc(c.tiktok_url)}" target="_blank">TikTok öffnen</a>`:""
-  ].filter(Boolean).join(" · ") || "–";
+  const reviewHtml=creatorReviews.length
+    ? `<div class="table-wrap"><table><thead><tr><th>Erkannt</th><th>Kategorie</th><th>Hinweis</th><th>Status</th></tr></thead><tbody>
+      ${creatorReviews.slice(0,10).map(r=>`<tr><td>${statsDateLabel(r.detected_at||r.created_at,true)}</td><td>${esc(r.category||"Auffälligkeit")}</td><td>${esc(r.summary||"–")}</td><td><span class="pill">${r.completed?esc(streamReviewResultLabel(r.review_result)):"Offen"}</span></td></tr>`).join("")}
+      </tbody></table></div>${creatorReviews.length>10?`<div class="muted small" style="margin-top:8px">Es werden die neuesten 10 von ${creatorReviews.length} Prüfhinweisen angezeigt.</div>`:""}`
+    : `<div class="card empty">Keine Stream-Prüfungen vorhanden.</div>`;
 
-  modal(
-    `Creator-Profil – ${esc(c.name)}`,
-    `<div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px">
+  const statsHtml=currentStats ? (()=>{
+    const p=previousStats||{}; const n=v=>Number(v||0); const one=v=>n(v).toFixed(1);
+    return `<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+      ${metric("Streamtage",`${n(currentStats.stream_days)}${statsCompareLine(currentStats.stream_days,p.stream_days,v=>n(v),statsChange(currentStats.stream_days,p.stream_days))}`)}
+      ${metric("Streams",`${n(currentStats.stream_count)}${statsCompareLine(currentStats.stream_count,p.stream_count,v=>n(v),statsChange(currentStats.stream_count,p.stream_count))}`)}
+      ${metric("Streamzeit",`${statsMinutesLabel(currentStats.total_stream_minutes)}${statsCompareLine(currentStats.total_stream_minutes,p.total_stream_minutes,statsMinutesLabel,statsMinutesChange(currentStats.total_stream_minutes,p.total_stream_minutes))}`)}
+      ${metric("Ø Zuschauer",`${one(currentStats.average_viewers)}${statsCompareLine(currentStats.average_viewers,p.average_viewers,one,statsChange(currentStats.average_viewers,p.average_viewers,1))}`)}
+      ${metric("Peak",`${n(currentStats.peak_viewers)}${statsCompareLine(currentStats.peak_viewers,p.peak_viewers,v=>n(v),statsChange(currentStats.peak_viewers,p.peak_viewers))}`)}
+      ${metric("Prüfhinweise",`${n(currentStats.review_count)}${statsCompareLine(currentStats.review_count,p.review_count,v=>n(v),statsChange(currentStats.review_count,p.review_count))}`)}
+    </div><div class="muted small" style="margin-top:9px">Zeitraum: ${statsDateLabel(currentStats.period_start)} – ${statsDateLabel(currentStats.period_end)} · Letzter Stream: ${statsDateLabel(currentStats.last_stream_at,true)}</div>`;
+  })() : `<div class="card empty">Aktuell keine offene 14-Tage-Auswertung vorhanden.</div>`;
+
+  const links=[c.twitch_url?`<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>`:"",c.tiktok_url?`<a href="${esc(c.tiktok_url)}" target="_blank">TikTok öffnen</a>`:""].filter(Boolean).join(" · ") || "–";
+
+  modal(`Creator-Akte – ${esc(c.name)}`,`
+    <div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px">
       ${metric("Rang",`${esc(c.rank||"–")}<div class="muted small" style="margin-top:6px">seit ${esc(rankSince.date)} · ${esc(rankSince.days)} Tage</div>`)}
       ${metric("Streamtage 30T",stats.days)}
-      ${metric("Ø Zuschauer",stats.avg)}
-      ${metric("Peak",stats.peak)}
+      ${metric("Offene Prüfhinweise",openReviews.length)}
+      ${metric("Aktive Warns",activeCreatorWarns.length)}
     </div>
 
-    <div class="card" style="margin-bottom:14px">
-      <div class="form-grid">
-        <div class="field">
-          <label>Discord-ID</label>
-          <div>${esc(c.discord_id||"–")}</div>
-        </div>
-        <div class="field">
-          <label>Dabei seit</label>
-          <div>${c.joined_at?new Date(String(c.joined_at).slice(0,10)+"T00:00:00").toLocaleDateString("de-DE"):"–"}</div>
-        </div>
-        <div class="field">
-          <label>Links</label>
-          <div>${links}</div>
-        </div>
-        <div class="field">
-          <label>Aktive Warns</label>
-          <div>${activeCreatorWarns.length}</div>
-        </div>
-        <div class="field full">
-          <label>Interne Info</label>
-          <div style="white-space:pre-wrap">${esc(c.summary||"–")}</div>
-        </div>
-        <div class="field full">
-          <label>Erstellt von</label>
-          <div>${esc(c.created_by_name||"–")}${c.created_at?` · ${new Date(c.created_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"})}`:""}</div>
-        </div>
-      </div>
-    </div>
+    <div class="card" style="margin-bottom:14px"><div class="section-head"><h2>Stammdaten</h2><span class="pill">${esc(c.rank||"–")}</span></div><div class="form-grid">
+      <div class="field"><label>Discord-ID</label><div>${esc(c.discord_id||"–")}</div></div>
+      <div class="field"><label>Dabei seit</label><div>${c.joined_at?new Date(String(c.joined_at).slice(0,10)+"T00:00:00").toLocaleDateString("de-DE"):"–"}</div></div>
+      <div class="field"><label>Links</label><div>${links}</div></div>
+      <div class="field"><label>30T Ø / Peak</label><div>${stats.avg} / ${stats.peak}</div></div>
+      <div class="field full"><label>Interne Info</label><div style="white-space:pre-wrap">${esc(c.summary||"–")}</div></div>
+      <div class="field full"><label>Erstellt von</label><div>${esc(c.created_by_name||"–")}${c.created_at?` · ${new Date(c.created_at).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"})}`:""}</div></div>
+    </div></div>
 
-    <div class="section">
-      <div class="section-head"><h2>Creator-Warns</h2><span class="pill">${activeCreatorWarns.length} aktiv</span></div>
-      ${warnHtml}
-    </div>
-
-    <div class="section">
-      <div class="section-head"><h2>Uprank-Verlauf</h2><span class="pill">${creatorRankHistory(c.id).length} Änderungen</span></div>
-      ${uprankHistoryHtml(c)}
-    </div>
-
-    <div class="section">
-      <div class="section-head"><h2>Änderungsverlauf</h2></div>
-      <div class="card">
-        ${creatorHistoryHtml(c.id)}
-      </div>
-    </div>
+    <div class="section"><div class="section-head"><h2>Aktuelle 14-Tage-Auswertung</h2><span class="pill">${currentStats?"Aktuell":"Keine offene"}</span></div>${statsHtml}</div>
+    <div class="section"><div class="section-head"><h2>Stream-Prüfungen</h2><span class="pill">${openReviews.length} offen · ${creatorReviews.length} gesamt</span></div>${reviewHtml}</div>
+    <div class="section"><div class="section-head"><h2>Creator-Warns</h2><span class="pill">${activeCreatorWarns.length} aktiv</span></div>${warnHtml}</div>
+    <div class="section"><div class="section-head"><h2>Uprank-Verlauf</h2><span class="pill">${creatorRankHistory(c.id).length} Änderungen</span></div>${uprankHistoryHtml(c)}</div>
+    <div class="section"><div class="section-head"><h2>Änderungsverlauf</h2></div><div class="card">${creatorHistoryHtml(c.id)}</div></div>
 
     <div class="actions" style="margin-top:18px;justify-content:flex-end">
       ${hasPerm("creator_edit")?`<button class="btn" onclick="closeModal();editCreator('${c.id}')">✎ Bearbeiten</button>`:""}
       <button class="btn secondary" onclick="closeModal()">Schließen</button>
     </div>`
   );
-}
-
-function creatorPage(){
-  if(!hasPerm("creator_view")) return permissionDenied();
-  const activeCreators=creators.filter(c=>!c.archived);
-  return `<div class="section-head"><h2>Alle Creator</h2>${hasPerm("creator_create")?`<button class="btn" onclick="creatorModal()">+ Creator anlegen</button>`:""}</div>${creatorTable(activeCreators)}<div class="notice">Creator können mit Discord-ID, Twitch-/TikTok-Link, Rang, Eintrittsdatum und internen Informationen angelegt werden.</div>`;
-}
-function livePage(){
-  const activeCreators=creators.filter(c=>!c.archived);
-  setTimeout(()=>refreshLiveStreams(true),0);
-  return `<div class="grid">
-    ${metric("Gerade live",liveStreams.length)}
-    ${metric("Höchster 30T-Peak",Math.max(0,...activeCreators.map(c=>twitchStatsForCreator(c.id).peak)))}
-    ${metric("Erfasste Creator",activeCreators.filter(c=>c.twitch_url).length)}
-    ${metric("Plattform","Twitch")}
-  </div>
-  <div class="section">
-    <div class="section-head"><h2>Live Streams</h2><button class="btn secondary" onclick="refreshLiveStreams(true)">↻ Aktualisieren</button></div>
-    <div id="liveStatusArea"><div class="card empty">Twitch wird gerade abgefragt …</div></div>
-  </div>`;
 }
 
 function statsMinutesLabel(minutes){
