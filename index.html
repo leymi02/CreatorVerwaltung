@@ -748,15 +748,21 @@ function statsCompareLine(current,previous,formatter,changeHtml){
   return `<div class="small muted" style="margin-top:7px">Vorher: ${formatter(previous)}</div><div class="small" style="margin-top:3px">Änderung: ${changeHtml}</div>`;
 }
 function statsSnapshotPair(creatorId){
-  const rows=statsSnapshots
+  const allRows=statsSnapshots
     .filter(x=>String(x.creator_id)===String(creatorId))
     .sort((a,b)=>new Date(b.period_end||0)-new Date(a.period_end||0));
-  const current=rows[0]||null;
-  if(!current) return {current:null,previous:null,history:[]};
-  const currentStart=new Date(current.period_start).getTime();
-  let previous=rows.find((x,i)=>i>0 && Math.abs(new Date(x.period_end).getTime()-currentStart)<120000) || null;
-  if(!previous) previous=rows[1]||null;
-  return {current,previous,history:rows};
+
+  const latest=allRows[0]||null;
+  const current=(latest && !latest.archived) ? latest : null;
+
+  if(!latest) return {current:null,previous:null,history:[],latest:null};
+
+  const currentStart=new Date(latest.period_start).getTime();
+  let previous=allRows.find((x,i)=>i>0 && Math.abs(new Date(x.period_end).getTime()-currentStart)<120000) || null;
+  if(!previous) previous=allRows[1]||null;
+
+  const history=allRows.filter(x=>!x.archived);
+  return {current,previous,history,latest};
 }
 function statsPage(){
   if(!hasPerm("live_view")) return permissionDenied();
@@ -784,7 +790,10 @@ function statsPage(){
         <div class="card" style="background:#0f0d14"><div class="muted small">Letzter Stream</div><b style="display:block;margin-top:7px">${statsDateLabel(current.last_stream_at,true)}</b></div>
         <div class="card" style="background:#0f0d14"><div class="muted small">Vergleichszeitraum</div><b style="display:block;margin-top:7px">${previous?`${statsDateLabel(previous.period_start)} – ${statsDateLabel(previous.period_end)}`:"Noch kein vorheriger Zeitraum"}</b></div>
       </div>
-      <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn secondary" onclick="openStatsHistory('${c.id}')">Auswertungsverlauf anzeigen</button></div>
+      <div class="actions" style="margin-top:14px;justify-content:flex-end">
+        <button class="btn secondary" onclick="openStatsHistory('${c.id}')">Auswertungsverlauf anzeigen</button>
+        ${access?.role==="owner"?`<button class="btn" onclick="archiveStatsSnapshot('${current.id}')">✓ Gesehen & archivieren</button>`:""}
+      </div>
     </div>`;
   }).join("");
   return `<div class="section-head"><div><h2>14-Tage-Auswertungen</h2><div class="muted small" style="margin-top:5px">Aktuelle Werte mit direktem Vergleich zum vorherigen Zeitraum.</div></div><span class="pill">Automatisch alle 2 Wochen</span></div>
@@ -798,6 +807,36 @@ function openStatsHistory(creatorId){
     <div class="table-wrap"><table><thead><tr><th>Zeitraum</th><th>Streamtage</th><th>Streams</th><th>Streamzeit</th><th>Ø Zuschauer</th><th>Peak</th><th>Prüfhinweise</th></tr></thead>
     <tbody>${history.map(x=>`<tr><td>${statsDateLabel(x.period_start)} – ${statsDateLabel(x.period_end)}</td><td>${Number(x.stream_days||0)}</td><td>${Number(x.stream_count||0)}</td><td>${statsMinutesLabel(x.total_stream_minutes)}</td><td>${Number(x.average_viewers||0).toFixed(1)}</td><td>${Number(x.peak_viewers||0)}</td><td>${Number(x.review_count||0)}</td></tr>`).join("")}</tbody></table></div>
     <div class="actions" style="margin-top:16px;justify-content:flex-end"><button class="btn secondary" onclick="closeModal()">Schließen</button></div>`);
+}
+
+async function archiveStatsSnapshot(id){
+  if(access?.role!=="owner") return alert("Keine Berechtigung.");
+  if(!confirm("Diese 14-Tage-Auswertung als gesehen markieren und ins Archiv verschieben?")) return;
+
+  const {error}=await sb.rpc("cv_archive_stats_snapshot",{p_id:id});
+  if(error){
+    console.error(error);
+    alert("Auswertung konnte nicht archiviert werden: "+error.message);
+    return;
+  }
+
+  await reload();
+  render("stats");
+}
+
+async function restoreStatsSnapshot(id){
+  if(access?.role!=="owner") return alert("Keine Berechtigung.");
+  if(!confirm("Diese 14-Tage-Auswertung wirklich wiederherstellen?")) return;
+
+  const {error}=await sb.rpc("cv_restore_stats_snapshot",{p_id:id});
+  if(error){
+    console.error(error);
+    alert("Auswertung konnte nicht wiederhergestellt werden: "+error.message);
+    return;
+  }
+
+  await reload();
+  render("archive");
 }
 
 function streamReviewStatusLabel(status){
@@ -1088,9 +1127,28 @@ function archivePage(){
   const archivedEvents=events.filter(e=>e.archived).sort((a,b)=>new Date(b.archived_at||0)-new Date(a.archived_at||0));
   const archivedCreators=creators.filter(c=>c.archived).sort((a,b)=>new Date(b.archived_at||0)-new Date(a.archived_at||0));
   const archivedWarns=warns.filter(w=>w.archived).sort((a,b)=>new Date(b.archived_at||0)-new Date(a.archived_at||0));
+  const archivedStats=statsSnapshots.filter(s=>s.archived).sort((a,b)=>new Date(b.archived_at||0)-new Date(a.archived_at||0));
 
-  return `<div class="section-head"><h2>Archiv</h2><span class="pill">30 Tage Aufbewahrung</span></div>
-  <div class="notice">Gelöschte Creator, Creator-Warns und Termine bleiben hier nachvollziehbar und können wiederhergestellt oder endgültig gelöscht werden.</div>
+  return `<div class="section-head"><h2>Archiv</h2><span class="pill">Verwaltung</span></div>
+  <div class="notice">Gelöschte Creator, Creator-Warns und Termine bleiben hier nachvollziehbar. Abgehakte 14-Tage-Auswertungen werden ebenfalls hier gespeichert und können wiederhergestellt werden.</div>
+
+  ${archiveSection("14-Tage-Auswertungen",archivedStats.map(s=>{
+    const c=creators.find(x=>String(x.id)===String(s.creator_id));
+    return `<tr>
+      <td><b>${esc(c?.name||"–")}</b></td>
+      <td>${statsDateLabel(s.period_start)} – ${statsDateLabel(s.period_end)}</td>
+      <td>${Number(s.stream_days||0)}</td>
+      <td>${Number(s.stream_count||0)}</td>
+      <td>${statsMinutesLabel(s.total_stream_minutes)}</td>
+      <td>${Number(s.average_viewers||0).toFixed(1)}</td>
+      <td>${Number(s.peak_viewers||0)}</td>
+      <td>${Number(s.review_count||0)}</td>
+      <td>${esc(s.archived_by_name||"–")}</td>
+      <td>${archiveDate(s.archived_at)}</td>
+      <td><button class="btn secondary" onclick="restoreStatsSnapshot('${s.id}')">↩ Wiederherstellen</button></td>
+    </tr>`;
+  }).join(""),
+    "<th>Creator</th><th>Zeitraum</th><th>Streamtage</th><th>Streams</th><th>Streamzeit</th><th>Ø Zuschauer</th><th>Peak</th><th>Prüfhinweise</th><th>Abgehakt von</th><th>Abgehakt am</th><th>Aktion</th>")}
 
   ${archiveSection("Creator",archivedCreators.map(c=>`
     <tr><td><b>${esc(c.name)}</b></td><td>${esc(c.rank||"–")}</td><td>${esc(c.created_by_name||"–")}</td>
