@@ -125,7 +125,12 @@ async function boot(){
 
   await reload();
   render("dashboard");
-  showWelcome();
+
+  const welcomeKey = `cvWelcomeShown_${me.id}`;
+  if(!sessionStorage.getItem(welcomeKey)){
+    showWelcome();
+    sessionStorage.setItem(welcomeKey, "1");
+  }
 }
 function deny(msg){$("#loginMsg").textContent=msg;$("#loginMsg").classList.remove("hidden")}
 
