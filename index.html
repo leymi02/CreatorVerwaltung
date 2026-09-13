@@ -251,61 +251,149 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)!important;box
 
 
 
-/* ===== THEME MATCH FIX: echte Hintergrundstimmung passend zu den Design-Vorschauen ===== */
+/* ===== CLEAN THEMES: Design-Look ohne Dashboard-Screenshot im Hintergrund ===== */
 body{
   --theme-bg-image:none;
   background:var(--bg)!important;
 }
-body[data-theme="feminine"]{--theme-bg-image:url("theme-assets/feminine-bg.jpg")}
-body[data-theme="masculine"]{--theme-bg-image:url("theme-assets/masculine-bg.jpg")}
-body[data-theme="retro"]{--theme-bg-image:url("theme-assets/retro-bg.jpg")}
-body[data-theme="neutral"]{--theme-bg-image:url("theme-assets/neutral-bg.jpg")}
-body[data-theme="aesthetic"]{--theme-bg-image:url("theme-assets/aesthetic-bg.jpg")}
-body[data-theme="modern"]{--theme-bg-image:url("theme-assets/modern-bg.jpg")}
-body[data-theme="elegant"]{--theme-bg-image:url("theme-assets/elegant-bg.jpg")}
-body[data-theme="mlg"]{--theme-bg-image:url("theme-assets/mlg-bg.jpg")}
-body[data-theme="custom"]{--theme-bg-image:none}
 
-/* Das Theme-Artwork ist jetzt derselbe Look wie in der Vorschau, statt nur ein generischer Farbverlauf. */
+/* Nur echte Deko/Atmosphäre – keine Bilder mit UI-Feldern im Seitenhintergrund. */
 body::before{
   content:""!important;
   position:fixed!important;
   inset:0!important;
   z-index:0!important;
   pointer-events:none!important;
-  background-image:
-    linear-gradient(180deg,rgba(5,6,10,.17),rgba(5,6,10,.34)),
-    var(--theme-bg-image),
-    var(--theme-art,none)!important;
-  background-size:cover,cover,cover!important;
-  background-position:center,center top,center!important;
+  background:var(--theme-art,none)!important;
+  background-size:cover!important;
+  background-position:center!important;
   background-repeat:no-repeat!important;
-  background-attachment:fixed!important;
   opacity:1!important;
 }
-body[data-theme="custom"]::before{
-  background-image:var(--theme-art,none)!important;
+body::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  opacity:.72;
 }
 .shell{position:relative!important;z-index:1!important;background:transparent!important}
 .main{background:transparent!important}
-.side{
-  background:color-mix(in srgb,var(--bg) 80%,transparent)!important;
-  -webkit-backdrop-filter:blur(18px) saturate(115%);
-  backdrop-filter:blur(18px) saturate(115%);
-}
 
-/* Panels werden leicht transparenter, damit das echte Theme-Artwork sichtbar bleibt. */
+/* Sidebar und Inhalte bleiben klar lesbar – kein verschwommener Screenshot-Look mehr. */
+.side{
+  background:color-mix(in srgb,var(--bg) 96%,#000 4%)!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
 .card,.table-wrap,.notice,.userbox,.modal{
   background:linear-gradient(180deg,
-    color-mix(in srgb,var(--theme-surface-2) 86%,transparent),
-    color-mix(in srgb,var(--theme-surface) 82%,transparent))!important;
-  -webkit-backdrop-filter:blur(13px) saturate(115%);
-  backdrop-filter:blur(13px) saturate(115%);
+    color-mix(in srgb,var(--theme-surface-2) 97%,transparent),
+    color-mix(in srgb,var(--theme-surface) 98%,transparent))!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
 }
 
-/* Theme-spezifische Details näher an den erstellten Entwürfen. */
+/* Weiblich – Rosé/Lila, weich, aber ohne florale/UI-Bilder im Hintergrund */
+body[data-theme="feminine"]{
+  --theme-art:
+    radial-gradient(circle at 86% 10%,rgba(255,126,198,.24),transparent 24%),
+    radial-gradient(circle at 15% 88%,rgba(201,135,255,.16),transparent 27%),
+    linear-gradient(135deg,transparent 0 63%,rgba(255,133,198,.06) 63.2% 63.5%,transparent 63.8%);
+}
+body[data-theme="feminine"]::after{
+  background:
+    radial-gradient(circle at 78% 22%,rgba(255,175,218,.11),transparent 17%),
+    radial-gradient(circle at 70% 32%,rgba(212,150,255,.08),transparent 15%);
+}
+
+/* Männlich – kühles Blau, technisch, klare Diagonalen */
+body[data-theme="masculine"]{
+  --theme-art:
+    radial-gradient(circle at 84% 12%,rgba(69,155,255,.22),transparent 24%),
+    radial-gradient(ellipse at 75% 95%,rgba(0,204,232,.10),transparent 33%),
+    linear-gradient(132deg,transparent 0 58%,rgba(70,166,255,.11) 58.15% 58.4%,transparent 58.65%),
+    linear-gradient(132deg,transparent 0 67%,rgba(0,214,232,.07) 67.15% 67.35%,transparent 67.55%);
+}
+body[data-theme="masculine"]::after{
+  background:linear-gradient(90deg,transparent 0 74%,rgba(80,160,255,.035) 74.1%,transparent 74.25%);
+}
+
+/* Retro – Synthwave-Gitter, Neon-Horizont */
+body[data-theme="retro"]{
+  --theme-art:
+    radial-gradient(circle at 82% 15%,rgba(255,55,205,.30),transparent 24%),
+    linear-gradient(rgba(32,217,255,.065) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,63,207,.06) 1px,transparent 1px),
+    linear-gradient(180deg,transparent 0 67%,rgba(32,217,255,.08) 67.1% 67.35%,transparent 67.6%);
+  background-size:auto,40px 40px,40px 40px,auto!important;
+}
+body[data-theme="retro"]::after{
+  background:linear-gradient(180deg,transparent 0 62%,rgba(255,63,207,.05) 62% 63%,transparent 63%);
+}
+
+/* Neutral – ruhiger Orbit/Glow, universell */
+body[data-theme="neutral"]{
+  --theme-art:
+    radial-gradient(circle at 82% 11%,transparent 0 8%,rgba(167,139,250,.20) 8.25% 8.65%,rgba(167,139,250,.035) 9.2%,transparent 18%),
+    radial-gradient(ellipse at 77% 100%,rgba(128,106,225,.10),transparent 34%),
+    linear-gradient(145deg,transparent 0 70%,rgba(167,139,250,.045) 70.15% 70.4%,transparent 70.65%);
+}
+body[data-theme="neutral"]::after{background:none}
+
+/* Ästhetisch – weiche Rosé-/Lavendel-Lichtinseln */
+body[data-theme="aesthetic"]{
+  --theme-art:
+    radial-gradient(circle at 83% 12%,rgba(246,193,221,.19),transparent 25%),
+    radial-gradient(circle at 18% 77%,rgba(219,164,255,.18),transparent 24%),
+    radial-gradient(circle at 69% 55%,rgba(240,173,201,.11),transparent 21%),
+    linear-gradient(116deg,transparent 0 58%,rgba(255,235,245,.05) 58.15% 58.35%,transparent 58.55%);
+}
+body[data-theme="aesthetic"]::after{
+  background:radial-gradient(circle at 20% 22%,rgba(255,255,255,.025),transparent 16%);
+}
+
+/* Modern – klare Architektur-/Grid-Linien */
+body[data-theme="modern"]{
+  --theme-art:
+    linear-gradient(90deg,transparent 0 19.9%,rgba(139,156,255,.055) 20%,transparent 20.12%,transparent 49.9%,rgba(111,228,255,.045) 50%,transparent 50.12%,transparent 79.9%,rgba(139,156,255,.04) 80%,transparent 80.12%),
+    linear-gradient(180deg,transparent 0 24.9%,rgba(255,255,255,.025) 25%,transparent 25.12%,transparent 69.9%,rgba(139,156,255,.035) 70%,transparent 70.12%),
+    radial-gradient(circle at 82% 17%,rgba(139,156,255,.14),transparent 26%);
+}
+body[data-theme="modern"]::after{background:none}
+
+/* Edel – Schwarz/Gold, sehr ruhige Lichtleisten */
+body[data-theme="elegant"]{
+  --theme-art:
+    radial-gradient(circle at 82% 10%,transparent 0 7%,rgba(255,224,160,.19) 7.25% 7.65%,transparent 15%),
+    linear-gradient(90deg,transparent 0 66.8%,rgba(215,178,109,.085) 67%,transparent 67.18%,transparent 75.8%,rgba(255,224,160,.05) 76%,transparent 76.18%),
+    radial-gradient(ellipse at 74% 100%,rgba(215,178,109,.105),transparent 33%);
+}
+body[data-theme="elegant"]::after{
+  background:linear-gradient(180deg,rgba(215,178,109,.018),transparent 22%,transparent 78%,rgba(215,178,109,.018));
+}
+
+/* MLG – Orange/Cyan, kantig und energiegeladen */
+body[data-theme="mlg"]{
+  --theme-art:
+    linear-gradient(135deg,transparent 0 37%,rgba(255,122,24,.10) 37.15% 37.5%,transparent 37.75%),
+    linear-gradient(45deg,transparent 0 73%,rgba(0,216,240,.09) 73.15% 73.5%,transparent 73.75%),
+    radial-gradient(circle at 83% 12%,rgba(255,122,24,.16),transparent 24%),
+    radial-gradient(circle at 69% 74%,rgba(0,216,240,.13),transparent 26%);
+}
+body[data-theme="mlg"]::after{
+  background:linear-gradient(90deg,rgba(255,122,24,.02),transparent 35%,transparent 65%,rgba(0,216,240,.02));
+}
+
+body[data-theme="custom"]{
+  --theme-art:radial-gradient(circle at 82% 12%,color-mix(in srgb,var(--accent) 17%,transparent),transparent 27%);
+}
+body[data-theme="custom"]::after{background:none}
+
+/* Theme-spezifische Rahmen/Glow bleiben erhalten und sind bewusst klar statt verwaschen. */
 body[data-theme="feminine"] .card,
-body[data-theme="aesthetic"] .card{box-shadow:0 10px 30px rgba(0,0,0,.28),0 0 24px var(--theme-glow)!important}
+body[data-theme="aesthetic"] .card{box-shadow:0 10px 30px rgba(0,0,0,.28),0 0 22px var(--theme-glow)!important}
 body[data-theme="retro"] .card,
 body[data-theme="retro"] .table-wrap{border-color:color-mix(in srgb,var(--accent) 44%,var(--accent2) 22%)!important;box-shadow:0 0 18px rgba(255,63,207,.16),0 0 10px rgba(32,217,255,.09)!important}
 body[data-theme="elegant"] .card,
@@ -315,7 +403,7 @@ body[data-theme="mlg"] .card:nth-child(even){border-color:rgba(0,216,240,.34)!im
 body[data-theme="mlg"] .metric:nth-child(odd) .metric-icon{color:#ff8a2a!important}
 body[data-theme="mlg"] .metric:nth-child(even) .metric-icon{color:#1ee7f2!important}
 
-/* Die Vorschaubilder zeigen exakt das Theme, das auch verwendet wird. */
+/* Vorschauen bleiben die erstellten Moodboards – die echte Seite nutzt aber nur deren Stil. */
 .theme-option[data-theme="feminine"] .theme-preview{box-shadow:inset 0 0 0 1px rgba(255,130,200,.25)}
 .theme-option[data-theme="masculine"] .theme-preview{box-shadow:inset 0 0 0 1px rgba(90,169,255,.25)}
 .theme-option[data-theme="retro"] .theme-preview{box-shadow:inset 0 0 0 1px rgba(255,63,207,.28)}
