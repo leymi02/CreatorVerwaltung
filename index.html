@@ -652,6 +652,19 @@ function openCreatorProfile(id){
 
   const links=[c.twitch_url?`<a href="${esc(c.twitch_url)}" target="_blank">Twitch öffnen</a>`:"",c.tiktok_url?`<a href="${esc(c.tiktok_url)}" target="_blank">TikTok öffnen</a>`:""].filter(Boolean).join(" · ") || "–";
 
+  const allCreatorStats=statsSnapshots
+    .filter(s=>String(s.creator_id)===String(c.id))
+    .sort((a,b)=>new Date(b.period_end||0)-new Date(a.period_end||0));
+  const statsHistoryHtml=allCreatorStats.length ? `<div class="table-wrap"><table>
+    <thead><tr><th>Zeitraum</th><th>Streamtage</th><th>Streams</th><th>Streamzeit</th><th>Ø Zuschauer</th><th>Peak</th><th>Prüfhinweise</th><th>Status</th></tr></thead>
+    <tbody>${allCreatorStats.map(s=>`<tr>
+      <td>${statsDateLabel(s.period_start)} – ${statsDateLabel(s.period_end)}</td>
+      <td>${Number(s.stream_days||0)}</td><td>${Number(s.stream_count||0)}</td>
+      <td>${statsMinutesLabel(s.total_stream_minutes)}</td><td>${Number(s.average_viewers||0).toFixed(1)}</td>
+      <td>${Number(s.peak_viewers||0)}</td><td>${Number(s.review_count||0)}</td>
+      <td><span class="pill">${s.archived?"Geprüft · Archiv":"Offen"}</span></td>
+    </tr>`).join("")}</tbody></table></div>` : `<div class="card empty">Noch keine 14-Tage-Auswertungen gespeichert.</div>`;
+
   modal(`Creator-Akte – ${esc(c.name)}`,`
     <div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px">
       ${metric("Rang",`${esc(c.rank||"–")}<div class="muted small" style="margin-top:6px">seit ${esc(rankSince.date)} · ${esc(rankSince.days)} Tage</div>`)}
@@ -670,6 +683,7 @@ function openCreatorProfile(id){
     </div></div>
 
     <div class="section"><div class="section-head"><h2>Aktuelle 14-Tage-Auswertung</h2><span class="pill">${currentStats?"Aktuell":"Keine offene"}</span></div>${statsHtml}</div>
+    <div class="section"><div class="section-head"><h2>Auswertungsverlauf</h2><span class="pill">${allCreatorStats.length} gespeichert</span></div>${statsHistoryHtml}</div>
     <div class="section"><div class="section-head"><h2>Stream-Prüfungen</h2><span class="pill">${openReviews.length} offen · ${creatorReviews.length} gesamt</span></div>${reviewHtml}</div>
     <div class="section"><div class="section-head"><h2>Creator-Warns</h2><span class="pill">${activeCreatorWarns.length} aktiv</span></div>${warnHtml}</div>
     <div class="section"><div class="section-head"><h2>Uprank-Verlauf</h2><span class="pill">${creatorRankHistory(c.id).length} Änderungen</span></div>${uprankHistoryHtml(c)}</div>
